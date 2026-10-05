@@ -1,9 +1,11 @@
-"""Safe password storage (built into Python, no extra package needed)."""
+"""Safe password storage and login tokens (built into Python, no extra package needed)."""
 import hashlib
 import hmac
 import os
+import secrets
 
 ITERATIONS = 200_000
+TOKEN_DAYS = 7   # how long a login stays valid
 
 
 def hash_password(password):
@@ -19,3 +21,16 @@ def verify_password(password, stored):
         return hmac.compare_digest(digest.hex(), digest_hex)
     except (ValueError, AttributeError):
         return False
+
+
+def new_token():
+    """A new random login token (43 letters, digits, - and _). Nobody can guess it."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token):
+    """
+    The database keeps only this hash of the token, never the token itself.
+    So even someone with a copy of the database cannot use it to log in.
+    """
+    return hashlib.sha256(token.encode()).hexdigest()

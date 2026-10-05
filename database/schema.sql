@@ -1,11 +1,12 @@
 -- Company AI Tools - Hiring AI Assistant
--- The whole database: 5 tables. Safe to run more than once.
+-- The whole database: 6 tables. Safe to run more than once.
 --
 --   departments   company departments
 --   users         HR / Recruitment logins + HODs and interviewers (records only, they do not log in)
 --   jobs          open positions, with the AI shortlist threshold and screening criteria
 --   candidates    one row per CV: AI score, where the process is now, and every decision of the process
 --   activity_log  history: every step, who recorded it, when, and the details (channel, notes...)
+--   login_tokens  who is logged in: one row per login, valid for 7 days
 
 CREATE TABLE IF NOT EXISTS departments (
     id    SERIAL PRIMARY KEY,
@@ -76,6 +77,14 @@ CREATE TABLE IF NOT EXISTS activity_log (
     user_id       INT REFERENCES users(id),   -- the HR user who recorded the step (NULL = automatic)
     details       JSONB,
     created_at    TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS login_tokens (
+    id          SERIAL PRIMARY KEY,
+    user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash  CHAR(64) UNIQUE NOT NULL,   -- SHA-256 of the token; the token itself is only in the browser cookie
+    expires_at  TIMESTAMP NOT NULL,         -- 7 days after login
+    created_at  TIMESTAMP DEFAULT NOW()
 );
 
 -- ---------------------------------------------------------------------------

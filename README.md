@@ -74,7 +74,7 @@ ollama pull llama3.1
 python -m database.setup_db
 ```
 
-This creates the `hiring_ai` database, its 5 tables, demo data and the first recruitment login.
+This creates the `hiring_ai` database, its 6 tables, demo data and the first recruitment login.
 It's safe to run again.
 
 You will see:
@@ -84,7 +84,7 @@ Demo HR login created: hr@bilal.local / ChangeMe@123
 ```
 
 **Already set up an earlier version?** Just run `python -m database.setup_db` again.
-It moves your existing data into the 5 tables and removes the old tables it no longer needs.
+It moves your existing data into the tables and removes the old tables it no longer needs.
 
 ---
 
@@ -148,9 +148,9 @@ hiring_ai_assistant/
 |   |-- steps.py               All process steps and their owner role (from the PRD)
 |
 |-- database/
-|   |-- schema.sql             The 5 database tables
+|   |-- schema.sql             The 6 database tables
 |   |-- seed.sql               Demo departments and users
-|   |-- migrate_old_tables.sql Moves data from older versions into the 5 tables (used by setup_db)
+|   |-- migrate_old_tables.sql Moves data from older versions into the tables (used by setup_db)
 |   |-- db.py                  PostgreSQL connection helpers
 |   |-- setup_db.py            Database setup (safe to run again)
 |
@@ -162,7 +162,7 @@ hiring_ai_assistant/
 |-- services/
 |   |-- repository.py          All database reads and writes
 |   |-- permissions.py         Only HR / Recruitment can complete steps
-|   |-- security.py            Safe password storage
+|   |-- security.py            Safe password storage and login tokens
 |   |-- workflow_service.py    Starts / continues each candidate's workflow
 |   |-- llm.py                 Connection to the open-source LLM (Ollama)
 |   |-- ai_helpers.py          AI features: rank CVs, drafts, questions, summary
@@ -195,7 +195,7 @@ hiring_ai_assistant/
 
 ---
 
-## 7. The database (5 tables)
+## 7. The database (6 tables)
 
 | Table          | What it keeps                                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -204,6 +204,7 @@ hiring_ai_assistant/
 | `jobs`         | Open positions: title, description, department, AI shortlist threshold                                                                               |
 | `candidates`   | One row per CV: AI score and reason, where the process is now, the shortlist decision, assigned interviewers, M1 / M2 schedule, and M1 / M2 feedback |
 | `activity_log` | The history: every step, when, which recruiter recorded it, and the details (channel, notes...)                                                      |
+| `login_tokens` | Who is logged in: one row per login (only a hash of the token), valid for 7 days. Log out deletes the row                                            |
 
 ---
 

@@ -5,8 +5,8 @@ Database setup. Run from the project folder (safe to run again at any time):
 
 It will:
 1. Create the database (if it does not exist)
-2. Create the 5 tables (schema.sql)
-3. Upgrade an older database: move its data into the 5 tables and remove the old tables
+2. Create the 6 tables (schema.sql)
+3. Upgrade an older database: move its data into the tables and remove the old tables
 4. Add demo users and departments (seed.sql)
 5. Set a password for the demo HR account (only if it has none yet)
 """
