@@ -12,9 +12,7 @@ How the graph is used
   Every arrow checks "waiting_at": if it is set, the run ends (END).
 """
 from typing import TypedDict
-
 from langgraph.graph import END, START, StateGraph
-
 from config.steps import STATUS_NOT_SHORTLISTED, STEP_ORDER, STEPS
 from services import repository as repo
 
