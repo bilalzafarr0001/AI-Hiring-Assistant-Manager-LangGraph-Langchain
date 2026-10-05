@@ -13,7 +13,7 @@ How the graph is used
 """
 from typing import TypedDict
 from langgraph.graph import END, START, StateGraph
-from config.steps import STATUS_NOT_SHORTLISTED, STEP_ORDER, STEPS
+from config.steps import STATUS_NOT_SHORTLISTED, STEPS
 from services import repository as repo
 
 
@@ -123,41 +123,68 @@ def after_m1_result(state):
     return "close_candidate"
 
 
-# The straight parts of the process: each step and the step after it.
-NEXT_STEP = {
-    # Stage 2: M1 round
-    "contact_hod": "contact_interviewers",        # HR  -> HOD
-    "contact_interviewers": "interviewer_slots",  # HOD -> HR
-    "interviewer_slots": "contact_candidate",     # HR
-    "contact_candidate": "schedule_m1",           # HR
-    "schedule_m1": "m1_interview",                # HR  -> Interviewers
-    "m1_interview": "m1_feedback",                # Interviewers
-    "m1_feedback": "record_m1",                   # Interviewers -> HR
-    # Stage 3: M2 round
-    "hod_slots": "schedule_m2",                   # HR
-    "schedule_m2": "m2_interview",                # HR  -> HOD
-    "m2_interview": "m2_feedback",                # HOD
-    "m2_feedback": "close_process",               # HOD -> HR
-}
-
-
 def build_graph():
     graph = StateGraph(HiringState)
 
-    for step in STEP_ORDER:
-        graph.add_node(step, make_step_node(step))
+    # ---------------- The nodes: one per step ----------------
+
+    # Stage 1: Screening
+    graph.add_node("approve_shortlist", make_step_node("approve_shortlist"))
+
+    # Stage 2: M1 round
+    graph.add_node("contact_hod", make_step_node("contact_hod"))
+    graph.add_node("contact_interviewers", make_step_node("contact_interviewers"))
+    graph.add_node("interviewer_slots", make_step_node("interviewer_slots"))
+    graph.add_node("contact_candidate", make_step_node("contact_candidate"))
+    graph.add_node("schedule_m1", make_step_node("schedule_m1"))
+    graph.add_node("m1_interview", make_step_node("m1_interview"))
+    graph.add_node("m1_feedback", make_step_node("m1_feedback"))
+    graph.add_node("record_m1", make_step_node("record_m1"))
+
+    # Stage 3: M2 round
+    graph.add_node("hod_slots", make_step_node("hod_slots"))
+    graph.add_node("schedule_m2", make_step_node("schedule_m2"))
+    graph.add_node("m2_interview", make_step_node("m2_interview"))
+    graph.add_node("m2_feedback", make_step_node("m2_feedback"))
+    graph.add_node("close_process", make_step_node("close_process"))
+
+    # Automatic close (not shortlisted, or not selected in M1)
     graph.add_node("close_candidate", close_candidate)
 
-    graph.add_conditional_edges(START, first_step, STEP_ORDER)
+    # ---------------- The arrows ----------------
 
-    # Stage 1: Screening -> M1 round, or close
+    # Where a run starts: a new candidate at approve_shortlist, otherwise at the step HR is completing.
+    graph.add_conditional_edges(START, first_step, [
+        "approve_shortlist",
+        "contact_hod", "contact_interviewers", "interviewer_slots", "contact_candidate",
+        "schedule_m1", "m1_interview", "m1_feedback", "record_m1",
+        "hod_slots", "schedule_m2", "m2_interview", "m2_feedback", "close_process",
+    ])
+
+    # Stage 1: Screening -> M1 round (Shortlisted), or close (Not shortlisted)
     graph.add_conditional_edges("approve_shortlist", after_shortlist, ["contact_hod", "close_candidate", END])
-    # Stages 2 and 3: straight lines
-    for step, next_step in NEXT_STEP.items():
-        graph.add_conditional_edges(step, go_to(next_step), [next_step, END])
-    # End of M1: -> M2 round, or close
+
+    # Stage 2: M1 round, one step after the other
+    # (each arrow goes to the next step, or to END when the step is waiting for HR)
+    graph.add_conditional_edges("contact_hod", go_to("contact_interviewers"), ["contact_interviewers", END])
+    graph.add_conditional_edges("contact_interviewers", go_to("interviewer_slots"), ["interviewer_slots", END])
+    graph.add_conditional_edges("interviewer_slots", go_to("contact_candidate"), ["contact_candidate", END])
+    graph.add_conditional_edges("contact_candidate", go_to("schedule_m1"), ["schedule_m1", END])
+    graph.add_conditional_edges("schedule_m1", go_to("m1_interview"), ["m1_interview", END])
+    graph.add_conditional_edges("m1_interview", go_to("m1_feedback"), ["m1_feedback", END])
+    graph.add_conditional_edges("m1_feedback", go_to("record_m1"), ["record_m1", END])
+
+    # End of M1: -> M2 round (M1 Selected), or close (M1 Unselected)
     graph.add_conditional_edges("record_m1", after_m1_result, ["hod_slots", "close_candidate", END])
 
+    # Stage 3: M2 round, one step after the other
+    graph.add_conditional_edges("hod_slots", go_to("schedule_m2"), ["schedule_m2", END])
+    graph.add_conditional_edges("schedule_m2", go_to("m2_interview"), ["m2_interview", END])
+    graph.add_conditional_edges("m2_interview", go_to("m2_feedback"), ["m2_feedback", END])
+    graph.add_conditional_edges("m2_feedback", go_to("close_process"), ["close_process", END])
+
+    # The end
     graph.add_edge("close_process", END)
     graph.add_edge("close_candidate", END)
+
     return graph.compile()
