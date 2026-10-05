@@ -143,7 +143,7 @@ def schedule_form(candidate, step):
 def m1_interview_form(candidate, step):
     st.caption("Interviewers' step: they conduct the interview. Record when it is done.")
     key = f"questions-{candidate['id']}"
-    if st.button("Suggest interview questions to share (AI)", key=f"btn-{key}"):
+    if st.button("Suggest interview questions to share (AI)", key=f"btn-{key}", icon=":material/auto_awesome:"):
         with st.spinner("AI is preparing questions..."):
             st.session_state[key] = ai_helpers.interview_questions(candidate["job_description"], candidate["cv_text"] or "")
     if st.session_state.get(key):
@@ -208,7 +208,7 @@ def hod_slots_form(candidate, step):
 def m2_interview_form(candidate, step):
     st.caption("HOD's step: the HOD conducts the interview. Record when it is done.")
     key = f"summary-{candidate['id']}"
-    if st.button("M1 feedback summary to share with HOD (AI)", key=f"btn-{key}"):
+    if st.button("M1 feedback summary to share with HOD (AI)", key=f"btn-{key}", icon=":material/auto_awesome:"):
         with st.spinner("AI is summarizing..."):
             st.session_state[key] = ai_helpers.summarize_feedback(repo.get_feedback(candidate["id"]))
     if st.session_state.get(key):
@@ -310,7 +310,7 @@ def previous_entry(candidate, step):
 def ai_message_button(step, candidate, purpose, recipient):
     """Optional AI-written message that HR can copy into Teams / email."""
     key = f"draft-{step}-{candidate['id']}"
-    if st.button("Generate AI message to copy", key=f"btn-{key}"):
+    if st.button("Generate AI message to copy", key=f"btn-{key}", icon=":material/auto_awesome:"):
         with st.spinner("AI is writing a message..."):
             st.session_state[key] = ai_helpers.draft_message(purpose, candidate["full_name"], candidate["job_title"], recipient)
     if st.session_state.get(key):

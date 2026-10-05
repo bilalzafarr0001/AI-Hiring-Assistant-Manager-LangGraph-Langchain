@@ -1,0 +1,82 @@
+# The look of the app: colours, fonts, headings, buttons, corners.
+# Streamlit reads this file when the app starts (restart the app after changing the fonts).
+# There is a light and a dark version; each user can switch in the app menu (⋮ → Settings).
+
+# ---------------------------------------------------------------- shared by light and dark
+[theme]
+# Fonts (loaded from Google Fonts)
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "'Plus Jakarta Sans':https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+
+# Text sizes: body text, then headings h1 (page title) to h6
+baseFontSize = 15
+headingFontSizes = ["30px", "24px", "20px", "17px", "15px", "13px"]
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+codeFontSize = "13px"
+
+# Corners and borders
+baseRadius = "8px"
+buttonRadius = "8px"
+showWidgetBorder = true
+showSidebarBorder = false
+linkUnderline = false
+
+# ---------------------------------------------------------------- light version
+[theme.light]
+primaryColor = "#3B5BDB"              # buttons, links, sliders, progress bars (indigo blue)
+backgroundColor = "#FFFFFF"           # page background
+secondaryBackgroundColor = "#F3F5F9"  # input boxes, tables, code
+textColor = "#1B2333"                 # body text (near-black navy)
+linkColor = "#3B5BDB"
+borderColor = "#DCE1EA"
+codeBackgroundColor = "#F3F5F9"
+codeTextColor = "#2F3B57"
+dataframeHeaderBackgroundColor = "#F3F5F9"
+dataframeBorderColor = "#DCE1EA"
+# Status colours (success, error, warning, info messages and coloured text)
+greenColor = "#1E8E5A"
+redColor = "#D43F3A"
+orangeColor = "#D97706"
+yellowColor = "#B7791F"
+blueColor = "#3B5BDB"
+violetColor = "#7048E8"
+grayColor = "#6B7385"
+
+[theme.light.sidebar]                 # a dark navy sidebar
+backgroundColor = "#16213E"
+secondaryBackgroundColor = "#202D50"
+textColor = "#E8ECF6"
+borderColor = "#2B3A63"
+primaryColor = "#8FA6FF"
+linkColor = "#AFC0FF"
+codeBackgroundColor = "#202D50"
+
+# ---------------------------------------------------------------- dark version
+[theme.dark]
+primaryColor = "#4263EB"
+backgroundColor = "#0F1524"
+secondaryBackgroundColor = "#18213A"
+textColor = "#E5E9F2"
+linkColor = "#9AAEFF"
+borderColor = "#28324D"
+codeBackgroundColor = "#18213A"
+codeTextColor = "#C9D3EA"
+dataframeHeaderBackgroundColor = "#18213A"
+dataframeBorderColor = "#28324D"
+greenColor = "#3DBE80"
+redColor = "#F06B66"
+orangeColor = "#F5A524"
+yellowColor = "#E3B341"
+blueColor = "#7C93FF"
+violetColor = "#A08BFA"
+grayColor = "#8B94A8"
+
+[theme.dark.sidebar]
+backgroundColor = "#0A0F1C"
+secondaryBackgroundColor = "#141B2E"
+textColor = "#E5E9F2"
+borderColor = "#1F2840"
+primaryColor = "#9AAEFF"
+linkColor = "#9AAEFF"
+codeBackgroundColor = "#141B2E"

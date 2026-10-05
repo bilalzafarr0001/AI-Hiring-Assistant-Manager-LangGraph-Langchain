@@ -8,9 +8,9 @@ from ui.auth import require_login
 from ui.process_view import flash, render_go_back, render_progress, show_flash
 from ui.step_forms import render_step_form
 
-st.set_page_config(page_title="My Tasks", layout="wide")
+st.set_page_config(page_title="My Tasks", page_icon=":material/task_alt:", layout="wide")
 user = require_login()
-st.title("My Tasks")
+st.title("My Tasks", icon=":material/task_alt:")
 show_flash()
 
 tasks = [c for c in repo.list_candidates() if can_act(user, c["current_step"])]

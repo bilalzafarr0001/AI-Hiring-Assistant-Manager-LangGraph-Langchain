@@ -6,9 +6,9 @@ from services import repository as repo
 from services.security import hash_password, verify_password
 from ui.auth import require_login
 
-st.set_page_config(page_title="People", layout="wide")
+st.set_page_config(page_title="People", page_icon=":material/group:", layout="wide")
 user = require_login()
-st.title("People")
+st.title("People", icon=":material/group:")
 st.caption("HODs and interviewers are kept here as records only. They do not log in. "
            "Only HR / Recruitment accounts can log in.")
 

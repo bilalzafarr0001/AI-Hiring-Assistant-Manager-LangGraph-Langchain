@@ -6,9 +6,9 @@ from services import repository as repo
 from ui.auth import require_login
 from ui.process_view import render_go_back, render_progress, show_flash
 
-st.set_page_config(page_title="Dashboard", layout="wide")
+st.set_page_config(page_title="Dashboard", page_icon=":material/dashboard:", layout="wide")
 user = require_login()
-st.title("Dashboard")
+st.title("Dashboard", icon=":material/dashboard:")
 show_flash()
 
 candidates = repo.list_candidates()
@@ -53,7 +53,7 @@ st.dataframe(
 
 # ---------------------------------------------------------------- one candidate's history
 
-st.subheader("Candidate history")
+st.subheader("Candidate history", icon=":material/history:")
 names = {c["id"]: c["full_name"] for c in candidates}
 cid = st.selectbox("Select candidate", list(names), key="dashboard-candidate", format_func=names.get)
 

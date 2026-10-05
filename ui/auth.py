@@ -32,7 +32,7 @@ def require_login():
 
     st.sidebar.write(f"Logged in as **{user['full_name']}**")
     st.sidebar.caption(user["email"])
-    if st.sidebar.button("Log out"):
+    if st.sidebar.button("Log out", icon=":material/logout:"):
         log_out()
     return user
 
@@ -56,7 +56,7 @@ def login_form():
     if st.session_state.pop("clear_cookie", False):
         set_cookie("", max_age_seconds=0)
 
-    st.title(APP_NAME)
+    st.title(APP_NAME, icon=":material/person_search:")
     st.subheader("Recruitment login")
     with st.form("login"):
         email = st.text_input("Email")

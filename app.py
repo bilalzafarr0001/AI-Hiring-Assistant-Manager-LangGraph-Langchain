@@ -16,7 +16,7 @@ from services import repository as repo
 from services.security import verify_password
 from ui.auth import require_login
 
-st.set_page_config(page_title=APP_NAME, layout="wide")
+st.set_page_config(page_title=APP_NAME, page_icon=":material/person_search:", layout="wide")
 user = require_login()
 
 DEMO_PASSWORD = "ChangeMe@123"
@@ -127,7 +127,7 @@ offers = [c for c in closed if c["status"] == OFFER]
 
 # ---------------------------------------------------------------- header
 
-st.title(APP_NAME)
+st.title(APP_NAME, icon=":material/person_search:")
 first_name = user["full_name"].split(" (")[0].split()[0]       # "Ayesha Khan (HR)" -> "Ayesha"
 st.markdown(f"#### {greeting()}, {first_name} 👋")
 st.caption(f"{datetime.now():%A, %d %B %Y}  ·  Signed in as {user['email']}")
@@ -137,12 +137,12 @@ st.caption(f"{datetime.now():%A, %d %B %Y}  ·  Signed in as {user['email']}")
 status, detail = ai_status()
 if status == "offline":
     st.warning("**AI is offline.** CVs can still be uploaded, but they will not get a score (they go to *Needs HR review*). "
-               "Start Ollama from the Start menu, then refresh.", icon="🤖")
+               "Start Ollama from the Start menu, then refresh.", icon=":material/smart_toy:")
 elif status == "no_model":
     st.warning(f"**AI model '{LLM_MODEL}' is not installed** in Ollama. Run `ollama pull {LLM_MODEL}` "
-               f"(installed: {detail or 'none'}).", icon="🤖")
+               f"(installed: {detail or 'none'}).", icon=":material/smart_toy:")
 if using_demo_password():
-    st.error("**You are still using the demo password.** Change it now in **People → My password**.", icon="🔐")
+    st.error("**You are still using the demo password.** Change it now in **People → My password**.", icon=":material/lock:")
 
 # Every department with a job needs a HOD and interviewers, or its candidates cannot start the M1 round.
 job_departments = {j["department_id"]: j["department"] for j in jobs}
@@ -156,12 +156,12 @@ for dept_id, dept_name in sorted(job_departments.items(), key=lambda item: item[
         missing.append("interviewers")
     if missing:
         st.warning(f"**{dept_name}** has open jobs but no {' and no '.join(missing)}. "
-                   "Shortlisted candidates cannot start the M1 round until you add them in **People**.", icon="👥")
+                   "Shortlisted candidates cannot start the M1 round until you add them in **People**.", icon=":material/group:")
 
 # ---------------------------------------------------------------- first-time setup
 
 if not jobs:
-    st.info("**Welcome! Let's set up your first hiring process.**", icon="🚀")
+    st.info("**Welcome! Let's set up your first hiring process.**", icon=":material/rocket_launch:")
     step1, step2, step3 = st.columns(3)
     with step1.container(border=True):
         st.markdown("**1. People**")
@@ -195,7 +195,7 @@ left, right = st.columns([3, 2], gap="large")
 # ---------------------------------------------------------------- what needs attention (longest waiting first)
 
 with left:
-    st.subheader("Needs your attention")
+    st.subheader("Needs your attention", icon=":material/notifications_active:")
     if not open_cases:
         st.success("Nothing is waiting. Every candidate's process is up to date. 🎉")
     else:
@@ -223,7 +223,7 @@ with left:
 # ---------------------------------------------------------------- where every candidate is
 
 with right:
-    st.subheader("Hiring pipeline")
+    st.subheader("Hiring pipeline", icon=":material/filter_alt:")
     total = max(len(candidates), 1)
     for label, count in (("Screening (needs HR review)", len(needs_review)), ("M1 round", len(in_m1)),
                          ("M2 round", len(in_m2)), ("Closed", len(closed))):
@@ -247,7 +247,7 @@ jobs_col, activity_col = st.columns([3, 2], gap="large")
 # ---------------------------------------------------------------- jobs at a glance
 
 with jobs_col:
-    st.subheader("Jobs at a glance")
+    st.subheader("Jobs at a glance", icon=":material/work:")
     rows = []
     for j in jobs[:10]:
         rows.append({"Job": j["title"], "Department": j["department"], "Candidates": j["candidate_count"],
@@ -260,7 +260,7 @@ with jobs_col:
 # ---------------------------------------------------------------- recent activity
 
 with activity_col:
-    st.subheader("Recent activity")
+    st.subheader("Recent activity", icon=":material/history:")
     if not activity:
         st.caption("No activity yet.")
     for a in activity:
@@ -270,7 +270,7 @@ with activity_col:
 
 # ---------------------------------------------------------------- how it works
 
-with st.expander("How the hiring process works"):
+with st.expander("How the hiring process works", icon=":material/help:"):
     st.markdown("""
 **Only HR / Recruitment uses this platform.** You contact HODs, interviewers and candidates through the usual channels
 (Teams, email, phone) and record each step here.

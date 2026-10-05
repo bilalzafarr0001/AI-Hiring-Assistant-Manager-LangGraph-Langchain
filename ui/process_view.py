@@ -38,7 +38,7 @@ def render_progress(candidate):
     else:
         st.progress(1.0, text=f"Process closed  ·  **{candidate['status']}**")
 
-    with st.popover("All steps"):
+    with st.popover("All steps", icon=":material/list:"):
         for each_step in STEP_ORDER:
             if each_step in done:
                 st.markdown(f"✅ {step_name(each_step)}")
@@ -55,7 +55,7 @@ def render_go_back(user, candidate, key):
     options = completed_steps(candidate)
     if not options:
         return
-    with st.popover("↩ Go back to an earlier step"):
+    with st.popover("Go back to an earlier step", icon=":material/undo:"):
         with st.form(f"go-back-{key}-{candidate['id']}", clear_on_submit=True):
             # No default on purpose: if the candidate changed meanwhile (another recruiter moved them), the list
             # changes and the choice is cleared, so HR is asked again instead of going back to a wrong step.

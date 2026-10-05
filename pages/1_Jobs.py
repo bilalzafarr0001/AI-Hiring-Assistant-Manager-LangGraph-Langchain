@@ -15,7 +15,7 @@ from ui.auth import require_login
 from ui.cv_upload import ensure_screening_criteria, save_uploaded_cvs, show_upload_report
 from ui.process_view import flash, show_flash
 
-st.set_page_config(page_title="Jobs", layout="wide")
+st.set_page_config(page_title="Jobs", page_icon=":material/work:", layout="wide")
 user = require_login()
 
 DEFAULT_THRESHOLD = 70
@@ -69,8 +69,8 @@ def create_job_dialog():
 
 def jobs_list_view():
     head, button = st.columns([4, 1], vertical_alignment="bottom")
-    head.title("Jobs")
-    if button.button("➕ Create job", type="primary", width="stretch"):
+    head.title("Jobs", icon=":material/work:")
+    if button.button("Create job", icon=":material/add:", type="primary", width="stretch"):
         create_job_dialog()
     show_flash()
 
@@ -131,7 +131,7 @@ def job_detail_view(job_id):
     m3.metric("Not shortlisted", results.count("Not shortlisted"))
     m4.metric("Needs HR review", results.count("Needs HR review"))
 
-    with st.expander("Job description"):
+    with st.expander("Job description", icon=":material/description:"):
         st.write(job["description"])
     criteria_editor(job)
     upload_section(job)
@@ -139,7 +139,7 @@ def job_detail_view(job_id):
 
 
 def threshold_editor(job):
-    with st.popover(f"Shortlist threshold: **{job['shortlist_threshold']}**"):
+    with st.popover(f"Shortlist threshold: **{job['shortlist_threshold']}**", icon=":material/tune:"):
         with st.form(f"threshold-{job['id']}"):
             value = st.slider("Shortlist CVs with an AI score of at least", 0, 100, job["shortlist_threshold"])
             st.caption("Applies to CVs uploaded from now on. Earlier results do not change.")
@@ -152,7 +152,8 @@ def threshold_editor(job):
 def criteria_editor(job):
     """Shows (and lets HR edit) exactly what every CV of this job is checked against."""
     criteria = job.get("screening_criteria")
-    with st.expander("What CVs are checked against (required skills)", expanded=not criteria):
+    with st.expander("What CVs are checked against (required skills)", expanded=not criteria,
+                     icon=":material/checklist:"):
         if criteria:
             st.markdown("**Required skills** (each line is worth the same points; alternatives on one line: any one is enough)")
             skill_lines = [f"- {' / '.join(group)}" for group in criteria["required_skills"]]
@@ -166,7 +167,7 @@ def criteria_editor(job):
                     "or click 'Read from job description' now.")
 
         edit, read = st.columns([3, 1.4])
-        with edit.popover("✏️ Edit"):
+        with edit.popover("Edit", icon=":material/edit:"):
             with st.form(f"criteria-{job['id']}"):
                 current_groups = (criteria or {}).get("required_skills", [])
                 current_text = "\n".join(" / ".join(group) for group in current_groups)
@@ -188,7 +189,7 @@ def criteria_editor(job):
                         repo.set_screening_criteria(job["id"], new_criteria)
                         flash("Required skills saved.")
                         st.rerun()
-        if read.button("🔄 Read from job description", help="The AI reads the job description again (takes a minute or two)."):
+        if read.button("Read from job description", icon=":material/refresh:", help="The AI reads the job description again (takes a minute or two)."):
             if ensure_screening_criteria(job, st.empty()):
                 flash("Required skills read from the job description.")
                 st.rerun()
@@ -199,7 +200,7 @@ def start_upload():
 
 
 def upload_section(job):
-    st.subheader("Upload CVs")
+    st.subheader("Upload CVs", icon=":material/upload_file:")
     st.caption(f"The AI scores each CV against this job (0-100). "
                f"A score of **{job['shortlist_threshold']} or more** is shortlisted automatically.")
     report = st.session_state.pop("upload_report", None)
@@ -214,7 +215,8 @@ def upload_section(job):
         f"CVs for **{job['title']}** (PDF, DOCX or TXT, one or many)",
         type=["pdf", "docx", "txt"], accept_multiple_files=True, key=f"cvs-{job['id']}-{upload_round}", disabled=busy,
     )
-    st.button("Scoring... please wait" if busy else "Upload and score with AI", type="primary",
+    st.button("Scoring... please wait" if busy else "Upload and score with AI", icon=":material/upload:",
+              type="primary",
               disabled=busy or not files, on_click=start_upload)
     if busy:
         try:
@@ -227,7 +229,7 @@ def upload_section(job):
 
 
 def candidates_section(job, candidates, results):
-    st.subheader("Candidates (ranked by AI score)")
+    st.subheader("Candidates (ranked by AI score)", icon=":material/leaderboard:")
     if not candidates:
         st.caption("No candidates yet. Upload CVs above.")
         return
@@ -262,12 +264,13 @@ def candidates_section(job, candidates, results):
     # Override: the AI is only a helper, HR has the final say.
     rejected = [c for c, result in zip(candidates, results) if result == "Not shortlisted"]
     if rejected:
-        with st.expander(f"Shortlist a candidate anyway ({len(rejected)} not shortlisted)"):
+        with st.expander(f"Shortlist a candidate anyway ({len(rejected)} not shortlisted)",
+                         icon=":material/person_add:"):
             names = {c["id"]: f"{c['full_name']} (score {c['ai_score']})" for c in rejected}
             # No default + a fixed key: the choice is kept (or cleared) if the list changes, never swapped for another candidate.
             chosen = st.selectbox("Candidate", list(names), index=None, placeholder="Choose a candidate",
                                   format_func=names.get, key=f"anyway-{job['id']}")
-            if st.button("Shortlist anyway", disabled=chosen is None):
+            if st.button("Shortlist anyway", icon=":material/person_add:", disabled=chosen is None):
                 try:
                     shortlist_anyway(user, chosen)
                     flash(f"{names[chosen]} shortlisted. They moved to the M1 round.")
