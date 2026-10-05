@@ -31,8 +31,8 @@ HERE = Path(__file__).parent
 
 
 def create_database_if_missing():
-    info = conninfo_to_dict(DATABASE_URL)
-    db_name = info.get("dbname")
+    db_name = conninfo_to_dict(DATABASE_URL).get("dbname")
+    # Connect to the built-in "postgres" database to create ours.
     admin_url = make_conninfo(DATABASE_URL, dbname="postgres")
     with psycopg.connect(admin_url, autocommit=True) as conn:
         exists = conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,)).fetchone()
@@ -53,11 +53,14 @@ def upgrade_old_database():
     """Moves data out of the old tables (if any) and removes them. All or nothing."""
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.transaction():
-            found = [t for t in OLD_APP_TABLES + OLD_LANGGRAPH_TABLES
-                     if conn.execute("SELECT to_regclass(%s)", (f"public.{t}",)).fetchone()[0]]
+            found = []
+            for table in OLD_APP_TABLES + OLD_LANGGRAPH_TABLES:
+                exists = conn.execute("SELECT to_regclass(%s)", (f"public.{table}",)).fetchone()[0]
+                if exists:
+                    found.append(table)
             if not found:
                 return
-            if all(t in found for t in OLD_APP_TABLES):
+            if all(table in found for table in OLD_APP_TABLES):
                 conn.execute((HERE / "migrate_old_tables.sql").read_text(encoding="utf-8"))
                 print("Moved interviewers, interviews and feedback into the candidates table.")
             for table in found:
@@ -78,7 +81,7 @@ def set_demo_hr_password():
 def list_tables():
     with psycopg.connect(DATABASE_URL) as conn:
         rows = conn.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename").fetchall()
-    return [r[0] for r in rows]
+    return [row[0] for row in rows]
 
 
 if __name__ == "__main__":

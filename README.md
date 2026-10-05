@@ -1,4 +1,4 @@
-# Company AI Tools - Hiring AI Assistant
+# Hiring AI Assistant
 
 A starter project for the Hiring AI Assistant described in the PRD.
 It follows the hiring process exactly: **Screening -> M1 round -> M2 round**.
@@ -125,7 +125,7 @@ HODs and interviewers are kept as **records only** (People → HODs & interviewe
 Open **Dashboard** at any time to see every candidate's status, the next step, and the full history
 (including which channel was used and which recruiter recorded each step).
 
-**Note:** for security, refreshing the browser page logs you out.
+**Note:** you stay logged in for 7 days, also after refreshing the page. Click **Log out** in the sidebar to end it.
 
 ---
 
@@ -146,6 +146,7 @@ hiring_ai_assistant/
 |-- config/
 |   |-- settings.py            Reads the .env file
 |   |-- steps.py               All process steps and their owner role (from the PRD)
+|   |-- word_lists.py          Other ways skills and degrees are written on CVs (data only)
 |
 |-- database/
 |   |-- schema.sql             The 6 database tables
@@ -154,26 +155,47 @@ hiring_ai_assistant/
 |   |-- db.py                  PostgreSQL connection helpers
 |   |-- setup_db.py            Database setup (safe to run again)
 |
-|-- graph/                     LangGraph workflow
-|   |-- state.py               The data the workflow works with for one candidate
-|   |-- nodes.py               Each step (saves what HR recorded, or waits for HR)
-|   |-- workflow.py            The order of steps: Screening -> M1 -> M2
+|-- graph/
+|   |-- workflow.py            The LangGraph graph: the steps, and the arrows Screening -> M1 -> M2
 |
 |-- services/
-|   |-- repository.py          All database reads and writes
-|   |-- permissions.py         Only HR / Recruitment can complete steps
-|   |-- security.py            Safe password storage and login tokens
-|   |-- workflow_service.py    Starts / continues each candidate's workflow
-|   |-- llm.py                 Connection to the open-source LLM (Ollama)
-|   |-- ai_helpers.py          AI features: rank CVs, drafts, questions, summary
+|   |-- scoring.py             The CV score (0-100): rank_cv()
+|   |-- job_requirements.py    What a job asks for: required skills, minimum years, degree fields
+|   |-- cv_checks.py           What the app finds in a CV by itself: skills, stated years, degree
+|   |-- prompts.py             Every text sent to the AI
+|   |-- llm.py                 Connection to the open-source LLM (Ollama) and reading its answers
+|   |-- ai_helpers.py          Small AI helpers: messages to copy, interview questions, feedback summary
 |   |-- cv_parser.py           Reads PDF / DOCX / TXT CVs
+|   |-- workflow_service.py    Starts / continues each candidate's process, and who may do it
+|   |-- repository.py          All database reads and writes
+|   |-- security.py            Safe password storage and login tokens
 |
 |-- ui/
 |   |-- auth.py                Login screen and logout
-|   |-- step_forms.py          The form HR fills to record each step
+|   |-- cv_upload.py           Uploading CVs: read, score (with a live timer), save, shortlist
+|   |-- step_forms.py          The form HR fills to record each step (one function per step)
+|   |-- process_view.py        Progress of a candidate, "Go back", and success messages
 |
 |-- uploads/                   Uploaded CVs are saved here
 ```
+
+### Where to change things
+
+| I want to change...                                   | Open                                                                    |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| How a CV is scored (the 4 parts and their points)     | `services/scoring.py`                                                   |
+| What the AI is asked                                  | `services/prompts.py`                                                   |
+| A skill the app does not recognise ("node" = Node.js) | `config/word_lists.py`                                                  |
+| How the job's required skills are read                | `services/job_requirements.py`                                          |
+| What happens when CVs are uploaded                    | `ui/cv_upload.py`                                                       |
+| The steps of the process, their names and order       | `config/steps.py` (names) and `graph/workflow.py` (order and branches)  |
+| The form of one step                                  | `ui/step_forms.py` (the function named after the step)                  |
+| A database query                                      | `services/repository.py`                                                |
+| Login                                                 | `ui/auth.py`                                                            |
+
+**How a CV gets its score:** `ui/cv_upload.py` reads the file (`services/cv_parser.py`) and calls
+`rank_cv()` in `services/scoring.py`. It checks the skills in the CV (`services/cv_checks.py`), asks the AI
+once (`services/prompts.py` + `services/llm.py`), checks the AI's numbers and adds up the four parts.
 
 ---
 

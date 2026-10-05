@@ -1,33 +1,32 @@
 """
-The bridge between the screens and the LangGraph workflow.
+The bridge between the pages and the hiring process (graph/workflow.py).
+
 Each candidate's place in the process is saved in their candidates row (current_step + decisions),
 so the process can pause for days (e.g. waiting for the HOD) and continue later, even after a restart.
+
+Only HR / Recruitment uses this platform, so HR completes every step. For HOD and interviewer steps,
+HR records what the HOD / interviewer decided, and the app saves WHO gave the decision and WHICH HR user entered it.
 """
 from functools import lru_cache
 
-from config.steps import STEP_ORDER, STEPS
+from config.steps import ROLE_HR, STEP_ORDER, STEPS
 from graph.workflow import build_graph
 from services import repository as repo
-from services.permissions import can_act
 
 
 @lru_cache(maxsize=1)
 def get_graph():
+    """The graph is built once and then reused."""
     return build_graph()
 
 
-def _state(candidate):
-    """The workflow's view of a candidate, read from their candidates row."""
-    return {
-        "candidate_id": candidate["id"],
-        "shortlist_decision": candidate["shortlist_decision"],
-        "m1_decision": candidate["m1_decision"],
-        "m2_decision": candidate["m2_decision"],
-    }
+def can_act(user, step):
+    """True if this user may complete (or go back to) this step: any real step, and only HR."""
+    return bool(step) and step in STEPS and user["role"] == ROLE_HR
 
 
 def start_workflow(candidate_id):
-    """Starts the process. It runs until the first step (approve shortlist) and waits there."""
+    """Starts the process for a new candidate. It runs until the first step (approve shortlist) and waits there."""
     get_graph().invoke({"candidate_id": candidate_id})
 
 
@@ -37,7 +36,10 @@ def current_step(candidate_id):
 
 
 def complete_step(user, candidate_id, data, expected_step=None):
-    """Completes the current step, but ONLY if this user is allowed to."""
+    """
+    HR completes the candidate's current step with the data from the step's form.
+    The graph saves it, moves on, and stops at the next step that needs HR.
+    """
     candidate = repo.get_candidate(candidate_id)
     step = candidate["current_step"] if candidate else None
     if step is None:
@@ -45,16 +47,23 @@ def complete_step(user, candidate_id, data, expected_step=None):
     if expected_step and step != expected_step:
         raise ValueError("This candidate is no longer at this step (it was completed or moved by someone else). "
                          "Please refresh the page.")
-    if not can_act(user, step, candidate):
+    if not can_act(user, step):
         raise PermissionError("You are not allowed to complete this step.")
+    # Take the step first, so two people cannot complete it at the same time.
     if not repo.claim_step(candidate_id, step):
         raise ValueError("This step was just completed by someone else. Please refresh the page.")
 
-    submission = {"step": step, "user_id": user["id"], "data": data}
+    state = {
+        "candidate_id": candidate["id"],
+        "shortlist_decision": candidate["shortlist_decision"],
+        "m1_decision": candidate["m1_decision"],
+        "m2_decision": candidate["m2_decision"],
+        "submission": {"step": step, "user_id": user["id"], "data": data},
+    }
     try:
-        get_graph().invoke({**_state(candidate), "submission": submission})
+        get_graph().invoke(state)
     except Exception:
-        repo.release_step(candidate_id, step)  # let HR try again
+        repo.release_step(candidate_id, step)  # give the step back so HR can try again
         raise
 
 
@@ -71,6 +80,17 @@ def auto_shortlist(user, candidate_id, score, threshold):
     }, expected_step="approve_shortlist")
     return decision
 
+
+def shortlist_anyway(user, candidate_id):
+    """HR overrides a 'Not shortlisted' result: the candidate re-enters the process at the M1 round."""
+    if not can_act(user, "approve_shortlist"):
+        raise PermissionError("You are not allowed to change the shortlist.")
+    if not repo.reopen_shortlist(candidate_id):
+        raise ValueError("Only candidates who were not shortlisted can be shortlisted manually.")
+    complete_step(user, candidate_id, {"decision": "Shortlisted", "override": True}, expected_step="approve_shortlist")
+
+
+# ---------------------------------------------------------------- the steps of one candidate
 
 def process_path(candidate):
     """
@@ -105,7 +125,7 @@ def go_back(user, candidate_id, to_step, reason):
         raise ValueError("Candidate not found.")
     if to_step not in STEPS:
         raise ValueError("Unknown step.")
-    if not can_act(user, to_step, candidate):
+    if not can_act(user, to_step):
         raise PermissionError("You are not allowed to change this step.")
     if not reason or not reason.strip():
         raise ValueError("Please write the reason for going back.")
@@ -120,12 +140,3 @@ def go_back(user, candidate_id, to_step, reason):
     repo.log_activity(candidate_id, "moved_back", user["id"], {
         "from": candidate["current_step"] or candidate["status"], "to": to_step, "reason": reason.strip(),
     })
-
-
-def shortlist_anyway(user, candidate_id):
-    """HR overrides a 'Not shortlisted' result: the candidate re-enters the process at the M1 round."""
-    if not can_act(user, "approve_shortlist"):
-        raise PermissionError("You are not allowed to change the shortlist.")
-    if not repo.reopen_shortlist(candidate_id):
-        raise ValueError("Only candidates who were not shortlisted can be shortlisted manually.")
-    complete_step(user, candidate_id, {"decision": "Shortlisted", "override": True}, expected_step="approve_shortlist")

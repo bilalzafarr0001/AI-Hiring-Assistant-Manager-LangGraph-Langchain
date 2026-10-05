@@ -1,4 +1,4 @@
--- Company AI Tools - Hiring AI Assistant
+-- Hiring AI Assistant
 -- The whole database: 6 tables. Safe to run more than once.
 --
 --   departments   company departments

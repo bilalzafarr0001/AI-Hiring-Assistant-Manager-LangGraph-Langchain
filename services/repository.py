@@ -1,10 +1,15 @@
-"""All database reads and writes for the app."""
+"""
+All database reads and writes for the app: one small function per action, grouped by table.
+(The tables are described in database/schema.sql.)
+"""
 from database.db import as_json, execute, fetch_all, fetch_one
 
 
 # ---------- Users and departments ----------
 
 def list_users(role=None, department_id=None):
+    """All users, or only those with this role and/or in this department."""
+    # "WHERE 1=1" is always true, so each filter below can simply add "AND ...".
     sql = "SELECT u.*, d.name AS department FROM users u LEFT JOIN departments d ON d.id = u.department_id WHERE 1=1"
     params = []
     if role:
@@ -120,9 +125,9 @@ def get_job(job_id):
     )
 
 
-
 # ---------- Candidates ----------
 
+# A candidate row plus what the pages need from the job, the department and the feedback givers.
 CANDIDATE_SELECT = """
     SELECT c.*, j.title AS job_title, j.description AS job_description,
            j.department_id, j.shortlist_threshold, d.name AS department,
@@ -225,13 +230,14 @@ def move_back(candidate_id, from_step, from_status, to_step, to_status, steps_to
     Puts the candidate back on an earlier step and empties the data of the steps that will be redone.
     Only works if the candidate is still where HR saw them (from_step / from_status). Returns True if it worked.
     """
-    clear = {}
+    columns_to_empty = {}
     for step in steps_to_redo:
-        clear.update(STEP_COLUMNS.get(step, {}))
-    # Column names and values come only from STEP_COLUMNS above, never from user input.
-    sets = "".join(f", {column} = {value}" for column, value in clear.items())
+        columns_to_empty.update(STEP_COLUMNS.get(step, {}))
+    # e.g. ", m2_decision = NULL, m2_feedback_by = NULL, m2_comments = NULL"
+    # (the column names and values come only from STEP_COLUMNS above, never from what a user typed)
+    empty_columns_sql = "".join(f", {column} = {value}" for column, value in columns_to_empty.items())
     row = execute(
-        f"""UPDATE candidates SET current_step = %s, status = %s, updated_at = NOW(){sets}
+        f"""UPDATE candidates SET current_step = %s, status = %s, updated_at = NOW(){empty_columns_sql}
             WHERE id = %s AND current_step IS NOT DISTINCT FROM %s AND status = %s RETURNING id""",
         (to_step, to_status, candidate_id, from_step, from_status),
     )
@@ -269,43 +275,46 @@ def get_assigned_interviewers(candidate_id):
     )
 
 
-_SAVE_INTERVIEW = {
-    "M1": "UPDATE candidates SET m1_scheduled_at = %s, m1_location = %s, updated_at = NOW() WHERE id = %s",
-    "M2": "UPDATE candidates SET m2_scheduled_at = %s, m2_location = %s, updated_at = NOW() WHERE id = %s",
-}
-
-_SAVE_FEEDBACK = {
-    "M1": "UPDATE candidates SET m1_decision = %s, m1_feedback_by = %s, m1_comments = %s, updated_at = NOW() WHERE id = %s",
-    "M2": "UPDATE candidates SET m2_decision = %s, m2_feedback_by = %s, m2_comments = %s, updated_at = NOW() WHERE id = %s",
-}
-
-
 def save_interview(candidate_id, round_name, scheduled_at, location):
-    execute(_SAVE_INTERVIEW[round_name], (scheduled_at, location, candidate_id))
+    """round_name is "M1" or "M2"."""
+    if round_name == "M1":
+        sql = "UPDATE candidates SET m1_scheduled_at = %s, m1_location = %s, updated_at = NOW() WHERE id = %s"
+    else:
+        sql = "UPDATE candidates SET m2_scheduled_at = %s, m2_location = %s, updated_at = NOW() WHERE id = %s"
+    execute(sql, (scheduled_at, location, candidate_id))
 
 
 def save_feedback(candidate_id, round_name, given_by, decision, comments):
     """given_by = the HOD / interviewer who gave it. (The HR user who entered it is in the activity log.)"""
-    execute(_SAVE_FEEDBACK[round_name], (decision, given_by, comments, candidate_id))
+    if round_name == "M1":
+        sql = "UPDATE candidates SET m1_decision = %s, m1_feedback_by = %s, m1_comments = %s, updated_at = NOW() WHERE id = %s"
+    else:
+        sql = "UPDATE candidates SET m2_decision = %s, m2_feedback_by = %s, m2_comments = %s, updated_at = NOW() WHERE id = %s"
+    execute(sql, (decision, given_by, comments, candidate_id))
 
 
 def get_interviews(candidate_id):
     """[{round, scheduled_at, location}] for each round that has been scheduled."""
     c = get_candidate(candidate_id)
-    return [
-        {"round": r, "scheduled_at": c[f"{r.lower()}_scheduled_at"], "location": c[f"{r.lower()}_location"]}
-        for r in ("M1", "M2") if c and c[f"{r.lower()}_scheduled_at"]
-    ]
+    interviews = []
+    if c and c["m1_scheduled_at"]:
+        interviews.append({"round": "M1", "scheduled_at": c["m1_scheduled_at"], "location": c["m1_location"]})
+    if c and c["m2_scheduled_at"]:
+        interviews.append({"round": "M2", "scheduled_at": c["m2_scheduled_at"], "location": c["m2_location"]})
+    return interviews
 
 
 def get_feedback(candidate_id):
     """[{round, given_by, decision, comments}] for each round that has feedback."""
     c = get_candidate(candidate_id)
-    return [
-        {"round": r, "given_by": c[f"{r.lower()}_feedback_by_name"] or "Unknown",
-         "decision": c[f"{r.lower()}_decision"], "comments": c[f"{r.lower()}_comments"]}
-        for r in ("M1", "M2") if c and c[f"{r.lower()}_decision"]
-    ]
+    feedback = []
+    if c and c["m1_decision"]:
+        feedback.append({"round": "M1", "given_by": c["m1_feedback_by_name"] or "Unknown",
+                         "decision": c["m1_decision"], "comments": c["m1_comments"]})
+    if c and c["m2_decision"]:
+        feedback.append({"round": "M2", "given_by": c["m2_feedback_by_name"] or "Unknown",
+                         "decision": c["m2_decision"], "comments": c["m2_comments"]})
+    return feedback
 
 
 # ---------- Activity log (history) ----------

@@ -21,6 +21,7 @@ user = require_login()
 
 DEMO_PASSWORD = "ChangeMe@123"
 OFFER = "Selected - Offer"
+# How each way of closing a process is shown on this page.
 CLOSED_LABELS = {
     "Selected - Offer": "Offer made",
     "Rejected": "Rejected after M2",
@@ -39,16 +40,24 @@ def ai_status():
             models = [m.get("name", "") for m in json.load(response).get("models", [])]
     except Exception:
         return "offline", ""
+    # Ollama lists models with a version, e.g. "llama3.1:latest".
     wanted = LLM_MODEL if ":" in LLM_MODEL else f"{LLM_MODEL}:latest"
-    return ("ready", LLM_MODEL) if wanted in models or LLM_MODEL in models else ("no_model", ", ".join(models))
+    if wanted in models or LLM_MODEL in models:
+        return "ready", LLM_MODEL
+    return "no_model", ", ".join(models)
 
 
 def greeting():
     hour = datetime.now().hour
-    return "Good morning" if hour < 12 else "Good afternoon" if hour < 17 else "Good evening"
+    if hour < 12:
+        return "Good morning"
+    if hour < 17:
+        return "Good afternoon"
+    return "Good evening"
 
 
 def time_ago(moment):
+    """'just now', '5 min ago', '3 h ago', 'yesterday', '4 days ago'"""
     if not moment:
         return ""
     seconds = max(0, int((datetime.now() - moment).total_seconds()))
@@ -59,27 +68,38 @@ def time_ago(moment):
     if seconds < 86400:
         return f"{seconds // 3600} h ago"
     days = seconds // 86400
-    return "yesterday" if days == 1 else f"{days} days ago"
+    if days == 1:
+        return "yesterday"
+    return f"{days} days ago"
 
 
-def waiting_text(moment):
-    days = (datetime.now() - moment).days if moment else 0
-    return "since today" if days == 0 else "1 day" if days == 1 else f"{days} days"
+def days_waiting(candidate):
+    if candidate["updated_at"]:
+        return (datetime.now() - candidate["updated_at"]).days
+    return 0
+
+
+def waiting_text(days):
+    if days == 0:
+        return "since today"
+    if days == 1:
+        return "1 day"
+    return f"{days} days"
 
 
 def action_text(row):
+    """One line of the 'Recent activity' list."""
     details = row["details"] or {}
     if row["step"] == "moved_back":
         to = STEPS.get(details.get("to"), {}).get("label", "an earlier step")
         return f"moved back to *{to}*"
     if row["step"] == "closed":
         return f"closed: {details.get('status', '')}"
-    label = STEPS.get(row["step"], {}).get("label", row["step"])
     if details.get("automatic"):
         return f"{details.get('decision', 'decided')} automatically (AI score {details.get('ai_score')})"
     if details.get("override"):
         return "shortlisted manually by HR"
-    return label
+    return STEPS.get(row["step"], {}).get("label", row["step"])
 
 
 def using_demo_password():
@@ -98,7 +118,7 @@ people = repo.list_users()
 departments = repo.list_departments()
 activity = repo.recent_activity(8)
 
-open_cases = [c for c in candidates if c["current_step"]]
+open_cases = [c for c in candidates if c["current_step"]]          # still in the process
 needs_review = [c for c in open_cases if c["current_step"] == "approve_shortlist"]
 in_m1 = [c for c in open_cases if STEPS[c["current_step"]]["stage"] == "M1 round"]
 in_m2 = [c for c in open_cases if STEPS[c["current_step"]]["stage"] == "M2 round"]
@@ -108,7 +128,8 @@ offers = [c for c in closed if c["status"] == OFFER]
 # ---------------------------------------------------------------- header
 
 st.title(APP_NAME)
-st.markdown(f"#### {greeting()}, {user['full_name'].split(' (')[0].split()[0]} 👋")
+first_name = user["full_name"].split(" (")[0].split()[0]       # "Ayesha Khan (HR)" -> "Ayesha"
+st.markdown(f"#### {greeting()}, {first_name} 👋")
 st.caption(f"{datetime.now():%A, %d %B %Y}  ·  Signed in as {user['email']}")
 
 # ---------------------------------------------------------------- things that need fixing first
@@ -123,11 +144,16 @@ elif status == "no_model":
 if using_demo_password():
     st.error("**You are still using the demo password.** Change it now in **People → My password**.", icon="🔐")
 
+# Every department with a job needs a HOD and interviewers, or its candidates cannot start the M1 round.
 job_departments = {j["department_id"]: j["department"] for j in jobs}
-for dept_id, dept_name in sorted(job_departments.items(), key=lambda x: x[1]):
+for dept_id, dept_name in sorted(job_departments.items(), key=lambda item: item[1]):
     has_hod = any(p["role"] == ROLE_HOD and p["department_id"] == dept_id for p in people)
     has_interviewer = any(p["role"] == ROLE_INTERVIEWER and p["department_id"] == dept_id for p in people)
-    missing = [what for what, ok in (("a HOD", has_hod), ("interviewers", has_interviewer)) if not ok]
+    missing = []
+    if not has_hod:
+        missing.append("a HOD")
+    if not has_interviewer:
+        missing.append("interviewers")
     if missing:
         st.warning(f"**{dept_name}** has open jobs but no {' and no '.join(missing)}. "
                    "Shortlisted candidates cannot start the M1 round until you add them in **People**.", icon="👥")
@@ -139,9 +165,9 @@ if not jobs:
     step1, step2, step3 = st.columns(3)
     with step1.container(border=True):
         st.markdown("**1. People**")
-        st.caption(f"{len(departments)} departments · "
-                   f"{sum(p['role'] == ROLE_HOD for p in people)} HODs · "
-                   f"{sum(p['role'] == ROLE_INTERVIEWER for p in people)} interviewers")
+        hod_count = sum(p["role"] == ROLE_HOD for p in people)
+        interviewer_count = sum(p["role"] == ROLE_INTERVIEWER for p in people)
+        st.caption(f"{len(departments)} departments · {hod_count} HODs · {interviewer_count} interviewers")
         st.page_link("pages/4_People.py", label="Check departments and people →")
     with step2.container(border=True):
         st.markdown("**2. Create a job**")
@@ -176,16 +202,23 @@ with left:
         longest = sorted(open_cases, key=lambda c: c["updated_at"] or datetime.now())[:6]
         for c in longest:
             step = STEPS[c["current_step"]]
-            days = (datetime.now() - c["updated_at"]).days if c["updated_at"] else 0
-            flag = "🔴" if days >= 3 else "🟠" if days >= 1 else "🟢"
+            days = days_waiting(c)
+            if days >= 3:
+                flag = "🔴"
+            elif days >= 1:
+                flag = "🟠"
+            else:
+                flag = "🟢"
             with st.container(border=True):
                 name, when = st.columns([4, 1.3], vertical_alignment="center")
                 name.markdown(f"{flag} **{c['full_name']}** · {c['job_title']}  \n"
                               f"<small>{step['stage']}: {step['label']}</small>", unsafe_allow_html=True)
-                when.caption(f"waiting {waiting_text(c['updated_at'])}")
+                when.caption(f"waiting {waiting_text(days)}")
+        link_text = f"Open My Tasks ({len(open_cases)} waiting"
         more = len(open_cases) - len(longest)
-        st.page_link("pages/2_My_Tasks.py",
-                     label=f"Open My Tasks ({len(open_cases)} waiting{f', {more} more not shown' if more > 0 else ''}) →")
+        if more > 0:
+            link_text += f", {more} more not shown"
+        st.page_link("pages/2_My_Tasks.py", label=link_text + ") →")
 
 # ---------------------------------------------------------------- where every candidate is
 
@@ -196,10 +229,12 @@ with right:
                          ("M2 round", len(in_m2)), ("Closed", len(closed))):
         st.progress(count / total, text=f"{label}: **{count}**")
     if closed:
-        outcomes = {}
+        outcomes = {}        # e.g. {"Offer made": 2, "Not shortlisted": 5}
         for c in closed:
-            outcomes[CLOSED_LABELS.get(c["status"], c["status"])] = outcomes.get(CLOSED_LABELS.get(c["status"], c["status"]), 0) + 1
-        st.caption("Closed: " + " · ".join(f"{k} {v}" for k, v in sorted(outcomes.items(), key=lambda x: -x[1])))
+            outcome = CLOSED_LABELS.get(c["status"], c["status"])
+            outcomes[outcome] = outcomes.get(outcome, 0) + 1
+        most_first = sorted(outcomes.items(), key=lambda item: -item[1])
+        st.caption("Closed: " + " · ".join(f"{outcome} {count}" for outcome, count in most_first))
     scored = [c["ai_score"] for c in candidates if c["ai_score"] is not None]
     if scored:
         st.caption(f"Average AI score: **{sum(scored) / len(scored):.0f}** · best: **{max(scored)}** · "
@@ -213,13 +248,13 @@ jobs_col, activity_col = st.columns([3, 2], gap="large")
 
 with jobs_col:
     st.subheader("Jobs at a glance")
-    st.dataframe(
-        [{"Job": j["title"], "Department": j["department"], "Candidates": j["candidate_count"],
-          "Shortlisted": j["shortlisted"], "Needs review": j["needs_review"],
-          "Threshold": j["shortlist_threshold"],
-          "Skills list": "ready" if j.get("screening_criteria") else "read on first upload"} for j in jobs[:10]],
-        hide_index=True, width="stretch",
-    )
+    rows = []
+    for j in jobs[:10]:
+        rows.append({"Job": j["title"], "Department": j["department"], "Candidates": j["candidate_count"],
+                     "Shortlisted": j["shortlisted"], "Needs review": j["needs_review"],
+                     "Threshold": j["shortlist_threshold"],
+                     "Skills list": "ready" if j.get("screening_criteria") else "read on first upload"})
+    st.dataframe(rows, hide_index=True, width="stretch")
     st.page_link("pages/1_Jobs.py", label=f"Manage jobs and upload CVs ({len(jobs)} job(s)) →")
 
 # ---------------------------------------------------------------- recent activity

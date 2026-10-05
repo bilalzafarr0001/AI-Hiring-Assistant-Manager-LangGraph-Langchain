@@ -20,23 +20,24 @@ COOKIE_NAME = "hiring_ai_token"
 
 
 def require_login():
-    user = _current_user()
+    """Returns the logged-in HR user. If nobody is logged in, shows the login form and stops the page."""
+    user = current_user()
     if not user:
-        _login_form()
+        login_form()
         st.stop()
 
     # Just logged in: also save the token in the browser.
     if st.session_state.pop("save_cookie", False):
-        _set_cookie(st.session_state["token"], max_age_seconds=TOKEN_DAYS * 24 * 60 * 60)
+        set_cookie(st.session_state["token"], max_age_seconds=TOKEN_DAYS * 24 * 60 * 60)
 
     st.sidebar.write(f"Logged in as **{user['full_name']}**")
     st.sidebar.caption(user["email"])
     if st.sidebar.button("Log out"):
-        _log_out()
+        log_out()
     return user
 
 
-def _current_user():
+def current_user():
     """
     The logged-in HR user, or None.
     The token comes from this browser session, or (after a refresh / in a new tab) from the cookie.
@@ -50,10 +51,10 @@ def _current_user():
     return user
 
 
-def _login_form():
+def login_form():
     # Just logged out: remove the token from the browser too.
     if st.session_state.pop("clear_cookie", False):
-        _set_cookie("", max_age_seconds=0)
+        set_cookie("", max_age_seconds=0)
 
     st.title(APP_NAME)
     st.subheader("Recruitment login")
@@ -72,19 +73,22 @@ def _login_form():
                 st.error("Wrong email or password.")
 
 
-def _log_out():
+def log_out():
     repo.delete_login_token(hash_token(st.session_state["token"]))
     st.session_state.clear()
-    st.session_state["clear_cookie"] = True   # done on the next run, see _login_form()
+    st.session_state["clear_cookie"] = True   # done on the next run, see login_form()
     st.rerun()
 
 
-def _set_cookie(value, max_age_seconds):
+def set_cookie(value, max_age_seconds):
     """
     Saves the token in the browser (or removes it, with max_age_seconds=0).
     Streamlit can read cookies but cannot write them, so a small script does it.
     """
-    secure = "; Secure" if (st.context.url or "").startswith("https") else ""   # once the app is live on HTTPS
+    if (st.context.url or "").startswith("https"):
+        secure = "; Secure"            # once the app is live on HTTPS, the cookie is only sent over HTTPS
+    else:
+        secure = ""
     st.html(
         f'<script>document.cookie = "{COOKIE_NAME}={value}; Max-Age={max_age_seconds}; '
         f'Path=/; SameSite=Strict{secure}";</script>',

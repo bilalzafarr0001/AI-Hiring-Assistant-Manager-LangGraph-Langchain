@@ -1,4 +1,4 @@
-"""Status of every candidate the user is allowed to see, plus the audit log."""
+"""Status of every candidate, plus the full history of one candidate."""
 import streamlit as st
 
 from config.steps import ROLE_LABELS, STEPS
@@ -24,15 +24,38 @@ def waiting_for(c):
     return f"{STEPS[step]['label']} ({ROLE_LABELS[STEPS[step]['owner']]} step)"
 
 
+def describe_activity(a):
+    """One line of the activity log: when, what, how, through which channel, and who recorded it."""
+    details = a["details"] or {}
+    label = STEPS[a["step"]]["label"] if a["step"] in STEPS else a["step"]
+    how = ""
+    if a["step"] == "moved_back":
+        if details.get("to") in STEPS:
+            label = f"↩ Moved back to '{STEPS[details['to']]['label']}'"
+        else:
+            label = "↩ Moved back"
+        how = f": {details.get('reason', '')}"
+    elif details.get("automatic"):
+        how = f": {details['decision']} automatically (AI score {details['ai_score']}, threshold {details['threshold']})"
+    elif details.get("override"):
+        how = ": Shortlisted manually by HR (overrode the AI result)"
+    channel = f" via {details['channel']}" if details.get("channel") else ""
+    return f"- {a['created_at']:%d %b %Y %H:%M} - **{label}**{how}{channel} (recorded by {a['done_by'] or 'System'})"
+
+
+# ---------------------------------------------------------------- every candidate
+
 st.dataframe(
     [{"Candidate": c["full_name"], "Job": c["job_title"], "Department": c["department"],
       "AI score": c["ai_score"], "Status": c["status"], "Next step": waiting_for(c)} for c in candidates],
     width="stretch", hide_index=True,
 )
 
+# ---------------------------------------------------------------- one candidate's history
+
 st.subheader("Candidate history")
-cid = st.selectbox("Select candidate", [c["id"] for c in candidates], key="dashboard-candidate",
-                   format_func=lambda i: next(c["full_name"] for c in candidates if c["id"] == i))
+names = {c["id"]: c["full_name"] for c in candidates}
+cid = st.selectbox("Select candidate", list(names), key="dashboard-candidate", format_func=names.get)
 
 candidate = repo.get_candidate(cid)
 where, back = st.columns([5, 2])
@@ -45,19 +68,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.markdown("**Activity log (what happened, when, recorded by whom)**")
     for a in repo.get_activity(cid):
-        label = STEPS[a["step"]]["label"] if a["step"] in STEPS else a["step"]
-        details = a["details"] or {}
-        channel = f" via {details['channel']}" if details.get("channel") else ""
-        if a["step"] == "moved_back":
-            label = f"↩ Moved back to '{STEPS[details['to']]['label']}'" if details.get("to") in STEPS else "↩ Moved back"
-            how = f": {details.get('reason', '')}"
-        elif details.get("automatic"):
-            how = f": {details['decision']} automatically (AI score {details['ai_score']}, threshold {details['threshold']})"
-        elif details.get("override"):
-            how = ": Shortlisted manually by HR (overrode the AI result)"
-        else:
-            how = ""
-        st.write(f"- {a['created_at']:%d %b %Y %H:%M} - **{label}**{how}{channel} (recorded by {a['done_by'] or 'System'})")
+        st.write(describe_activity(a))
 with col2:
     st.markdown("**Interviews**")
     for i in repo.get_interviews(cid):

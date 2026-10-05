@@ -11,4 +11,4 @@ LLM_MODEL = os.getenv("LLM_MODEL", "llama3.1")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").replace("://localhost", "://127.0.0.1")
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 
-APP_NAME = "Company AI Tools - Hiring AI Assistant"
+APP_NAME = "Hiring AI Assistant"

@@ -15,9 +15,11 @@ st.caption("HODs and interviewers are kept here as records only. They do not log
 departments = repo.list_departments()
 dept_names = {d["id"]: d["name"] for d in departments}
 
-tab1, tab2, tab3, tab4 = st.tabs(["Departments", "HODs & interviewers", "Recruitment accounts", "My password"])
+departments_tab, people_tab, accounts_tab, password_tab = st.tabs(
+    ["Departments", "HODs & interviewers", "Recruitment accounts", "My password"])
 
-with tab1:
+# ---------------------------------------------------------------- departments
+with departments_tab:
     with st.form("add-dept", clear_on_submit=True):
         name = st.text_input("New department name")
         if st.form_submit_button("Add department"):
@@ -29,7 +31,8 @@ with tab1:
                 st.error("Please enter a name.")
     st.dataframe([{"Department": d["name"]} for d in departments], hide_index=True, width="stretch")
 
-with tab2:
+# ---------------------------------------------------------------- HODs and interviewers (records only, no login)
+with people_tab:
     if not departments:
         st.info("Add a department first.")
     else:
@@ -52,7 +55,8 @@ with tab2:
     st.dataframe([{"Name": p["full_name"], "Email": p["email"], "Role": ROLE_LABELS[p["role"]],
                    "Department": p["department"]} for p in people], hide_index=True, width="stretch")
 
-with tab3:
+# ---------------------------------------------------------------- HR / Recruitment accounts (they log in)
+with accounts_tab:
     with st.form("add-hr", clear_on_submit=True):
         full_name = st.text_input("Full name")
         email = st.text_input("Email (used to log in)")
@@ -74,7 +78,8 @@ with tab3:
                    "Can log in": "Yes" if u["password_hash"] else "No"} for u in hr_users],
                  hide_index=True, width="stretch")
 
-with tab4:
+# ---------------------------------------------------------------- change my own password
+with password_tab:
     with st.form("change-pw", clear_on_submit=True):
         current = st.text_input("Current password", type="password")
         new = st.text_input("New password (min 8 characters)", type="password")

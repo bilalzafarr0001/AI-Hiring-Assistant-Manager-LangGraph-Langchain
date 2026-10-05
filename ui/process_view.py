@@ -1,6 +1,8 @@
 """
-Where a candidate is in the process, and going back to an earlier step.
-Used on My Tasks and on the Dashboard.
+Pieces shared by the pages:
+- flash() / show_flash(): a success message that is still shown after the page reloads
+- render_progress():      where a candidate is in the process (used on My Tasks and the Dashboard)
+- render_go_back():       sending a candidate back to an earlier step (used on My Tasks and the Dashboard)
 """
 import streamlit as st
 
@@ -19,7 +21,8 @@ def show_flash():
         st.success(message)
 
 
-def _step_name(step):
+def step_name(step):
+    """'schedule_m1' -> 'M1 round: Schedule M1 interview'"""
     return f"{STEPS[step]['stage']}: {STEPS[step]['label']}"
 
 
@@ -31,20 +34,20 @@ def render_progress(candidate):
 
     if step:
         number = STEP_ORDER.index(step) + 1
-        st.progress(number / total, text=f"Step {number} of {total}  ·  Now: **{_step_name(step)}**")
+        st.progress(number / total, text=f"Step {number} of {total}  ·  Now: **{step_name(step)}**")
     else:
         st.progress(1.0, text=f"Process closed  ·  **{candidate['status']}**")
 
     with st.popover("All steps"):
-        for s in STEP_ORDER:
-            if s in done:
-                st.markdown(f"✅ {_step_name(s)}")
-            elif s == step:
-                st.markdown(f"▶️ **{_step_name(s)}**  ← now")
-            elif step and STEP_ORDER.index(s) > STEP_ORDER.index(step):
-                st.markdown(f"⚪ {_step_name(s)}")
+        for each_step in STEP_ORDER:
+            if each_step in done:
+                st.markdown(f"✅ {step_name(each_step)}")
+            elif each_step == step:
+                st.markdown(f"▶️ **{step_name(each_step)}**  ← now")
+            elif step and STEP_ORDER.index(each_step) > STEP_ORDER.index(step):
+                st.markdown(f"⚪ {step_name(each_step)}")
             else:  # skipped: the process was closed before reaching this step
-                st.markdown(f":gray[~~{_step_name(s)}~~] (not needed)")
+                st.markdown(f":gray[~~{step_name(each_step)}~~] (not needed)")
 
 
 def render_go_back(user, candidate, key):
@@ -57,7 +60,7 @@ def render_go_back(user, candidate, key):
             # No default on purpose: if the candidate changed meanwhile (another recruiter moved them), the list
             # changes and the choice is cleared, so HR is asked again instead of going back to a wrong step.
             to_step = st.selectbox("Go back to", options, index=None, placeholder="Choose the step to go back to",
-                                   format_func=_step_name, key=f"go-back-step-{key}-{candidate['id']}")
+                                   format_func=step_name, key=f"go-back-step-{key}-{candidate['id']}")
             st.caption("The process continues again from this step, so this step and the steps after it "
                        "must be recorded again. Nothing is deleted from the history.")
             reason = st.text_area("Reason (required)", placeholder="e.g. Hamza and Hina are absent, the HOD assigned new interviewers")
