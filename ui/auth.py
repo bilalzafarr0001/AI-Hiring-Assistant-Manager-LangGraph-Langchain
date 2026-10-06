@@ -42,12 +42,11 @@ def require_login():
         sign_in_page()
         st.stop()
 
-    save_new_cookies()
-
     st.sidebar.write(f"Logged in as **{user['full_name']}**")
     st.sidebar.caption(user["email"])
     if st.sidebar.button("Log out", icon=":material/logout:"):
         log_out(user)
+    save_new_cookies()
     return user
 
 
@@ -91,11 +90,6 @@ def user_from_token(token, token_type):
 # ---------------------------------------------------------------- the sign-in page
 
 def sign_in_page():
-    # Just logged out: remove the tokens from the browser too.
-    if st.session_state.pop("clear_cookies", False):
-        set_cookie(ACCESS_COOKIE, "", max_age_seconds=0)
-        set_cookie(REFRESH_COOKIE, "", max_age_seconds=0)
-
     st.title(APP_NAME, icon=":material/person_search:")
     st.subheader("Recruitment login")
     sign_in_tab, sign_up_tab = st.tabs(["Sign in", "Sign up"])
@@ -103,6 +97,12 @@ def sign_in_page():
         sign_in_form()
     with sign_up_tab:
         sign_up_form()
+
+    # Just logged out: remove the tokens from the browser too.
+    # (Done last, so these invisible scripts never push the form down: that made the form flicker twice.)
+    if st.session_state.pop("clear_cookies", False):
+        set_cookie(ACCESS_COOKIE, "", max_age_seconds=0)
+        set_cookie(REFRESH_COOKIE, "", max_age_seconds=0)
 
 
 def sign_in_form():
@@ -167,9 +167,13 @@ def log_out(user):
 # ---------------------------------------------------------------- cookies
 
 def save_new_cookies():
-    """Saves the tokens made on this run or the run before (after sign in, or after a refresh) in the browser."""
-    for name, value, max_age_seconds in st.session_state.pop("cookies_to_save", []):
-        set_cookie(name, value, max_age_seconds)
+    """
+    Saves the tokens made on this run or the run before (after sign in, or after a refresh) in the browser.
+    The invisible scripts go at the bottom of the sidebar, so they never push the page content down.
+    """
+    with st.sidebar:
+        for name, value, max_age_seconds in st.session_state.pop("cookies_to_save", []):
+            set_cookie(name, value, max_age_seconds)
 
 
 def set_cookie(name, value, max_age_seconds):
