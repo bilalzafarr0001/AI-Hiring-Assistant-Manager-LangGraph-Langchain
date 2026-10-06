@@ -1,12 +1,31 @@
-"""Safe password storage and login tokens (built into Python, no extra package needed)."""
+"""
+Passwords and sign-in tokens.
+
+Passwords are never stored: only a salted PBKDF2 hash (built into Python).
+
+After sign in, the user gets two signed tokens (JSON Web Tokens, made with the PyJWT package):
+    access token    valid 15 minutes   checked on every page
+    refresh token   valid 7 days       when the access token has expired, it gives a new one (no new sign in)
+Nothing is saved in the database for a token. A token carries the user's id, its type ("access" / "refresh")
+and the user's token_version. It is signed with JWT_SECRET (.env), so nobody can make or change one.
+Log out adds 1 to the user's token_version: every token made before stops working.
+"""
 import hashlib
 import hmac
 import os
-import secrets
+from datetime import datetime, timedelta, timezone
+
+import jwt
+
+from config.settings import JWT_SECRET
 
 ITERATIONS = 200_000
-TOKEN_DAYS = 7   # how long a login stays valid
+ACCESS_TOKEN_MINUTES = 15
+REFRESH_TOKEN_DAYS = 7
+ALGORITHM = "HS256"
 
+
+# ---------------------------------------------------------------- passwords
 
 def hash_password(password):
     salt = os.urandom(16)
@@ -23,14 +42,36 @@ def verify_password(password, stored):
         return False
 
 
-def new_token():
-    """A new random login token (43 letters, digits, - and _). Nobody can guess it."""
-    return secrets.token_urlsafe(32)
+# ---------------------------------------------------------------- tokens
+
+def create_token(user, token_type):
+    """A new signed token for this user. token_type is "access" (15 minutes) or "refresh" (7 days)."""
+    now = datetime.now(timezone.utc)
+    if token_type == "access":
+        expires = now + timedelta(minutes=ACCESS_TOKEN_MINUTES)
+    else:
+        expires = now + timedelta(days=REFRESH_TOKEN_DAYS)
+    payload = {
+        "sub": str(user["id"]),          # who the token belongs to
+        "type": token_type,              # "access" or "refresh"
+        "ver": user["token_version"],    # stops working when the user logs out (the version goes up)
+        "iat": now,                      # made at
+        "exp": expires,                  # expires at
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
 
 
-def hash_token(token):
+def read_token(token, token_type):
     """
-    The database keeps only this hash of the token, never the token itself.
-    So even someone with a copy of the database cannot use it to log in.
+    The data inside the token, e.g. {"sub": "1", "type": "access", "ver": 0, ...},
+    or None if the token is missing, fake, changed, expired, or of the other type.
     """
-    return hashlib.sha256(token.encode()).hexdigest()
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+    except jwt.InvalidTokenError:        # wrong signature, expired, damaged...
+        return None
+    if payload.get("type") != token_type:
+        return None
+    return payload

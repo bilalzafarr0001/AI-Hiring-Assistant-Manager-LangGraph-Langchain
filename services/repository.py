@@ -55,32 +55,20 @@ def set_password(user_id, password_hash):
     execute("UPDATE users SET password_hash = %s WHERE id = %s", (password_hash, user_id))
 
 
-# ---------- Login tokens (stay logged in for some days) ----------
+# ---------- Signed-in user (the tokens themselves are made in services/security.py) ----------
 
-def save_login_token(user_id, token_hash, days):
-    """Saves a new login, valid for `days` days. Also removes logins that have already expired."""
-    execute("DELETE FROM login_tokens WHERE expires_at < NOW()")
-    execute(
-        "INSERT INTO login_tokens (user_id, token_hash, expires_at) VALUES (%s, %s, NOW() + %s * INTERVAL '1 day')",
-        (user_id, token_hash, days),
-    )
-
-
-def get_user_by_token(token_hash):
-    """The HR user who owns this token, or None if the token is unknown or expired."""
+def get_signed_in_user(user_id):
+    """The HR user a token belongs to, or None if that user cannot sign in (no longer HR, or no password)."""
     return fetch_one(
-        """SELECT u.*, d.name AS department FROM login_tokens t
-           JOIN users u ON u.id = t.user_id
-           LEFT JOIN departments d ON d.id = u.department_id
-           WHERE t.token_hash = %s AND t.expires_at > NOW()
-             AND u.role = 'HR' AND u.password_hash IS NOT NULL""",
-        (token_hash,),
+        """SELECT u.*, d.name AS department FROM users u LEFT JOIN departments d ON d.id = u.department_id
+           WHERE u.id = %s AND u.role = 'HR' AND u.password_hash IS NOT NULL""",
+        (user_id,),
     )
 
 
-def delete_login_token(token_hash):
-    """Log out: the token stops working."""
-    execute("DELETE FROM login_tokens WHERE token_hash = %s", (token_hash,))
+def bump_token_version(user_id):
+    """Log out: every token made before for this user (on every device) stops working."""
+    execute("UPDATE users SET token_version = token_version + 1 WHERE id = %s", (user_id,))
 
 
 # ---------- Jobs ----------

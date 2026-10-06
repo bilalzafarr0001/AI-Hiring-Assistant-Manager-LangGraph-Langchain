@@ -60,6 +60,12 @@ Open `.env` and set your PostgreSQL password in `DATABASE_URL`:
 DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/hiring_ai
 ```
 
+Then make a secret key for the sign-in tokens and put it after `JWT_SECRET=` in `.env`:
+
+```
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
 **Step 4: Download the open-source LLM**
 
 ```
@@ -74,7 +80,7 @@ ollama pull llama3.1
 python -m database.setup_db
 ```
 
-This creates the `hiring_ai` database, its 6 tables, demo data and the first recruitment login.
+This creates the `hiring_ai` database, its 5 tables, demo data and the first recruitment login.
 It's safe to run again.
 
 You will see:
@@ -98,17 +104,18 @@ The app opens in your browser at http://localhost:8501
 
 ---
 
-## 4. Log in and try the full flow
+## 4. Sign in and try the full flow
 
-Open http://localhost:8501 and log in with:
+Open http://localhost:8501 and sign in with the demo account:
 
 - **Email:** `hr@bilal.local`
 - **Password:** `ChangeMe@123`
 
 **Change this password right away:** go to **People** → **My password**.
 
-To give other recruitment team members access, go to **People** → **Recruitment accounts** and create an account for each person.
-HODs and interviewers are kept as **records only** (People → HODs & interviewers). They don't log in.
+New recruitment team members can create their own account on the **Sign up** tab of the sign-in page,
+or you can create one for them in **People** → **Recruitment accounts**.
+HODs and interviewers are kept as **records only** (People → HODs & interviewers). They don't sign in.
 
 **Walk through one candidate:**
 
@@ -125,7 +132,10 @@ HODs and interviewers are kept as **records only** (People → HODs & interviewe
 Open **Dashboard** at any time to see every candidate's status, the next step, and the full history
 (including which channel was used and which recruiter recorded each step).
 
-**Note:** you stay logged in for 7 days, also after refreshing the page. Click **Log out** in the sidebar to end it.
+**Staying signed in:** after you sign in, the app gives your browser two signed tokens (JSON Web Tokens):
+an **access token** (15 minutes) and a **refresh token** (7 days). When the access token expires, the refresh
+token quietly gets a new one, so you stay signed in for 7 days, also after refreshing the page.
+Click **Log out** in the sidebar to end it: this signs you out on every device.
 
 ---
 
@@ -168,10 +178,10 @@ hiring_ai_assistant/
 |   |-- cv_parser.py           Reads PDF / DOCX / TXT CVs
 |   |-- workflow_service.py    Starts / continues each candidate's process, and who may do it
 |   |-- repository.py          All database reads and writes
-|   |-- security.py            Safe password storage and login tokens
+|   |-- security.py            Safe password storage, and the sign-in tokens (JWT: access + refresh)
 |
 |-- ui/
-|   |-- auth.py                Login screen and logout
+|   |-- auth.py                Sign in, sign up, staying signed in, and log out
 |   |-- cv_upload.py           Uploading CVs: read, score (with a live timer), save, shortlist
 |   |-- step_forms.py          The form HR fills to record each step (one function per step)
 |   |-- process_view.py        Progress of a candidate, "Go back", and success messages
@@ -191,7 +201,8 @@ hiring_ai_assistant/
 | The steps of the process, their names and order       | `config/steps.py` (names) and `graph/workflow.py` (order and branches)  |
 | The form of one step                                  | `ui/step_forms.py` (the function named after the step)                  |
 | A database query                                      | `services/repository.py`                                                |
-| Login                                                 | `ui/auth.py`                                                            |
+| Sign in / sign up pages                               | `ui/auth.py`                                                            |
+| How long tokens are valid (15 minutes / 7 days)       | `services/security.py`                                                  |
 
 **How a CV gets its score:** `ui/cv_upload.py` reads the file (`services/cv_parser.py`) and calls
 `rank_cv()` in `services/scoring.py`. It checks the skills in the CV (`services/cv_checks.py`), asks the AI
@@ -217,16 +228,18 @@ once (`services/prompts.py` + `services/llm.py`), checks the AI's numbers and ad
 
 ---
 
-## 7. The database (6 tables)
+## 7. The database (5 tables)
 
 | Table          | What it keeps                                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `departments`  | Company departments                                                                                                                                  |
-| `users`        | HR / Recruitment logins, and HODs and interviewers (records only, they don't log in)                                                                 |
+| `users`        | HR / Recruitment accounts (they sign in), and HODs and interviewers (records only). `token_version` goes up by 1 on every log out                    |
 | `jobs`         | Open positions: title, description, department, AI shortlist threshold                                                                               |
 | `candidates`   | One row per CV: AI score and reason, where the process is now, the shortlist decision, assigned interviewers, M1 / M2 schedule, and M1 / M2 feedback |
 | `activity_log` | The history: every step, when, which recruiter recorded it, and the details (channel, notes...)                                                      |
-| `login_tokens` | Who is logged in: one row per login (only a hash of the token), valid for 7 days. Log out deletes the row                                            |
+
+Sign-in tokens are **not** stored in the database: they are signed with `JWT_SECRET` from `.env`, so the app can
+check them without a table. Running `python -m database.setup_db` removes the `login_tokens` table of older versions.
 
 ---
 
@@ -240,6 +253,7 @@ once (`services/prompts.py` + `services/llm.py`), checks the AI's numbers and ad
 | `No module named ...`            | Activate the virtual environment, then run `pip install -r requirements.txt` again |
 | "Wrong email or password"        | Use `hr@bilal.local` / `ChangeMe@123` (or the password you changed it to)          |
 | Login page keeps appearing       | Run `python -m database.setup_db` again to create the demo login                   |
+| "JWT_SECRET is missing"          | Add `JWT_SECRET=...` to `.env` (see Step 3), then restart the app                  |
 
 ---
 

@@ -1,12 +1,13 @@
 -- Hiring AI Assistant
--- The whole database: 6 tables. Safe to run more than once.
+-- The whole database: 5 tables. Safe to run more than once.
 --
 --   departments   company departments
---   users         HR / Recruitment logins + HODs and interviewers (records only, they do not log in)
+--   users         HR / Recruitment accounts (they sign in) + HODs and interviewers (records only, they do not sign in)
 --   jobs          open positions, with the AI shortlist threshold and screening criteria
 --   candidates    one row per CV: AI score, where the process is now, and every decision of the process
 --   activity_log  history: every step, who recorded it, when, and the details (channel, notes...)
---   login_tokens  who is logged in: one row per login, valid for 7 days
+--
+-- Sign-in tokens are NOT stored in the database: they are signed JSON Web Tokens (services/security.py).
 
 CREATE TABLE IF NOT EXISTS departments (
     id    SERIAL PRIMARY KEY,
@@ -19,7 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
     email          VARCHAR(150) UNIQUE NOT NULL,
     role           VARCHAR(20)  NOT NULL CHECK (role IN ('HR', 'HOD', 'INTERVIEWER')),
     department_id  INT REFERENCES departments(id),
-    password_hash  TEXT,                 -- only HR / Recruitment users have one (they are the only ones who log in)
+    password_hash  TEXT,                 -- only HR / Recruitment users have one (they are the only ones who sign in)
+    token_version  INT NOT NULL DEFAULT 0,   -- +1 on every log out: all sign-in tokens made before stop working
     created_at     TIMESTAMP DEFAULT NOW()
 );
 
@@ -79,19 +81,13 @@ CREATE TABLE IF NOT EXISTS activity_log (
     created_at    TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS login_tokens (
-    id          SERIAL PRIMARY KEY,
-    user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash  CHAR(64) UNIQUE NOT NULL,   -- SHA-256 of the token; the token itself is only in the browser cookie
-    expires_at  TIMESTAMP NOT NULL,         -- 7 days after login
-    created_at  TIMESTAMP DEFAULT NOW()
-);
-
 -- ---------------------------------------------------------------------------
 -- Upgrade an existing database from an older version of this app
 -- (adds the new columns; the old tables are moved and removed by setup_db.py).
 -- ---------------------------------------------------------------------------
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0;
+DROP TABLE IF EXISTS login_tokens;   -- older versions saved logins here; now the tokens are signed JWTs
 ALTER TABLE jobs  ADD COLUMN IF NOT EXISTS shortlist_threshold INT NOT NULL DEFAULT 70
     CHECK (shortlist_threshold BETWEEN 0 AND 100);
 ALTER TABLE jobs  ADD COLUMN IF NOT EXISTS screening_criteria JSONB;

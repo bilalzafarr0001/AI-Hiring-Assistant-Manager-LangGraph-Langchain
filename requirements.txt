@@ -16,3 +16,6 @@ psycopg[binary]>=3.2.0
 
 # Settings from .env file
 python-dotenv>=1.0.0
+
+# Sign-in tokens (JSON Web Tokens)
+PyJWT>=2.8.0
