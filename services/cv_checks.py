@@ -32,11 +32,20 @@ def check_skills(cv_text, required_skills):
     missing = []
     for group in required_skills:
         label = " / ".join(group)
-        if any(is_mentioned(text, variant) for skill in group for variant in skill_variants(skill)):
+        if group_is_mentioned(text, group):
             found.append(label)
         else:
             missing.append(label)
     return found, missing
+
+
+def group_is_mentioned(text, group):
+    """True if ANY skill of the group is in the CV text, written in any of its ways (e.g. "PostgreSQL" or "postgres")."""
+    for skill in group:
+        for variant in skill_variants(skill):
+            if is_mentioned(text, variant):
+                return True
+    return False
 
 
 def skill_variants(skill):
@@ -47,17 +56,23 @@ def skill_variants(skill):
     """
     text = skill.lower().strip()
     in_brackets = re.findall(r"\((.*?)\)", text)                    # "authentication (jwt, rbac)" -> ["jwt, rbac"]
-    text = re.sub(r"\(.*?\)", " ", text)
-    text = " ".join(word for word in text.split() if word not in FILLER_WORDS).strip()   # "strong typescript knowledge" -> "typescript"
+    text = re.sub(r"\(.*?\)", " ", text)                            # remove the brackets from the name
+
+    # Remove filler words: "strong typescript knowledge" -> "typescript"
+    words = []
+    for word in text.split():
+        if word not in FILLER_WORDS:
+            words.append(word)
+    text = " ".join(words).strip()
 
     variants = set()
     if text:
-        variants |= spellings(text)
-        variants |= set(SKILL_ALIASES.get(alias_key(text), []))
+        variants.update(spellings(text))
+        variants.update(SKILL_ALIASES.get(alias_key(text), []))
     for bracket_text in in_brackets:                               # the skills in brackets count too
         for piece in re.split(r",|/|\bor\b|\band\b", bracket_text):
             if piece.strip():
-                variants |= skill_variants(piece.strip())
+                variants.update(skill_variants(piece.strip()))
 
     # Risky everyday words ("rest", "go"...) are replaced by their safe forms ("rest api", "golang"...).
     # One-letter names are kept only when the skill itself is one letter ("C").
@@ -65,7 +80,7 @@ def skill_variants(skill):
     for variant in variants:
         variant = variant.strip()
         if variant in RISKY_WORDS:
-            safe |= set(RISKY_WORDS[variant])
+            safe.update(RISKY_WORDS[variant])
         elif len(variant) >= 2 or variant == text:
             safe.add(variant)
     return safe
@@ -74,12 +89,14 @@ def skill_variants(skill):
 def spellings(text):
     """Common spellings of the same name: 'node.js' -> node.js, nodejs, node js;  'nextjs' -> next.js, next js"""
     forms = {text, text.replace(" ", ""), text.replace(".", ""), text.replace(".", " "), text.replace("-", " ")}
-    if text.endswith(".js"):
+    if text.endswith(".js"):                    # "node.js" -> also "nodejs" and "node js"
         root = text[:-3]
-        forms |= {root + "js", root + " js"}
-    elif text.endswith("js") and len(text) > 4:
+        forms.add(root + "js")
+        forms.add(root + " js")
+    elif text.endswith("js") and len(text) > 4:  # "nextjs" -> also "next.js" and "next js"
         root = text[:-2].rstrip(". ")
-        forms |= {root + ".js", root + " js"}
+        forms.add(root + ".js")
+        forms.add(root + " js")
     return forms
 
 
@@ -97,8 +114,12 @@ def is_mentioned(text, variant):
         edge = r"a-z0-9\-_./+#"      # very short names must stand alone (no letter, digit or - _ . / + # around them)
     else:
         edge = r"a-z0-9"             # longer names: no letter or digit around them
-    not_followed_by = NOT_FOLLOWED_BY.get(variant, "")
-    pattern = rf"(?<![{edge}])" + re.escape(variant) + rf"(?![{edge}]){not_followed_by}"
+    # The search pattern is built from 4 parts:
+    nothing_before = rf"(?<![{edge}])"                      # 1. none of the edge characters just before the name
+    name = re.escape(variant)                               # 2. the name itself ("node.js": the dot is a real dot)
+    nothing_after = rf"(?![{edge}])"                        # 3. none of the edge characters just after the name
+    not_followed_by = NOT_FOLLOWED_BY.get(variant, "")      # 4. "react" must not be followed by "native"
+    pattern = nothing_before + name + nothing_after + not_followed_by
     return re.search(pattern, text) is not None
 
 

@@ -134,16 +134,26 @@ def simple_skill_groups(lines):
         if YEARS.search(line):
             continue
         line = re.sub(r"\(.*?\)", "", line).strip(" .;:")              # remove "(...)"
-        if re.search(r"\s+or\s+|\s+and/or\s+|\s+/\s+", line):           # "X or Y", "X and/or Y", "X / Y"
-            skills_on_line = [re.split(r"\s+and/or\s+|\s+or\s+|\s+/\s+|,", line)]          # ONE group
-        else:                                                            # "X, Y", "X and Y", "X & Y"
-            skills_on_line = [[name] for name in re.split(r",|\s+and\s+|\s+&\s+", line)]   # one group EACH
-        for group in skills_on_line:
-            names = [name.strip(" .;:") for name in group if name.strip(" .;:")]
+
+        if re.search(r"\s+or\s+|\s+and/or\s+|\s+/\s+", line):
+            # "X or Y", "X and/or Y", "X / Y" are alternatives: ONE group with all the names
+            line_groups = [re.split(r"\s+and/or\s+|\s+or\s+|\s+/\s+|,", line)]
+        else:
+            # "X, Y", "X and Y", "X & Y": each skill is needed, so one group PER name
+            line_groups = []
+            for name in re.split(r",|\s+and\s+|\s+&\s+", line):
+                line_groups.append([name])
+
+        for group in line_groups:
+            names = []
+            for name in group:
+                name = name.strip(" .;:")
+                if name:
+                    names.append(name)
             if not names:
                 continue
             for name in names:
-                if len(name.split()) > 4:
+                if len(name.split()) > 4:     # a full sentence, not a skill name: let the AI read the list
                     return None
             groups.append(names)
     return groups or None
@@ -160,7 +170,11 @@ def clean_criteria(skills, min_years):
             group = [group]
         if not isinstance(group, list):
             continue
-        names = [str(name).strip() for name in group if str(name).strip()]
+        names = []
+        for name in group:
+            name = str(name).strip()
+            if name:
+                names.append(name)
         if names and names not in groups:
             groups.append(names)
     years = to_years(min_years)

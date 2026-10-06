@@ -74,7 +74,6 @@ def save_uploaded_cvs(job, files, user):
 
                 # 3. Score it with the AI.
                 rank = score_cv(job, text, file.name, n, total, done_seconds, line, overall)
-
                 # 4. Save the candidate. Their process starts and waits at "Approve shortlist".
                 line.markdown(f"💾 Saving {file.name}...")
                 name = rank["name"] or Path(file.name).stem
@@ -82,16 +81,14 @@ def save_uploaded_cvs(job, files, user):
                     job["id"], name, rank["email"], str(path), text, rank["score"], rank["reason"]
                 )
                 start_workflow(candidate_id)
-            except BaseException as error:  # something failed, or the upload was stopped (e.g. the page was left)
-                # Undo everything done for this CV.
-                if candidate_id:
-                    repo.delete_candidate(candidate_id)
-                path.unlink(missing_ok=True)
-                if not isinstance(error, Exception):
-                    raise              # the upload was stopped: stop here
+            except Exception as error:      # something failed for this CV: undo it, then go on with the next CV
+                undo_cv(candidate_id, path)
                 report["failed"].append(f"{file.name}: {error}")
                 line.markdown(f"❌ {file.name}: {error}")
                 continue
+            except BaseException:           # the upload was stopped (e.g. the page was left): undo this CV and stop
+                undo_cv(candidate_id, path)
+                raise
 
             # 5. Apply the job's rule: AI score >= threshold -> Shortlisted.
             if rank["score"] is not None:
@@ -103,7 +100,10 @@ def save_uploaded_cvs(job, files, user):
             except Exception as error:
                 print(f"[Shortlist] Could not apply the rule to candidate {candidate_id}: {error}")
                 decision = None
-            took = clock(done_seconds[-1]) if done_seconds else ""
+            if done_seconds:
+                took = clock(done_seconds[-1])     # how long the AI took for this CV
+            else:
+                took = ""
             if decision == "Shortlisted":
                 report["shortlisted"].append(label)
                 line.markdown(f"✅ {file.name} → **{label}** → Shortlisted ({took})")
@@ -118,6 +118,13 @@ def save_uploaded_cvs(job, files, user):
         report["seconds"] = time.time() - started
         status.update(label=f"Done: {total} CV(s) processed in {clock(report['seconds'])}", state="complete")
     return report
+
+
+def undo_cv(candidate_id, path):
+    """Undoes everything done for one CV that failed: deletes the candidate (if it was created) and the file."""
+    if candidate_id:
+        repo.delete_candidate(candidate_id)
+    path.unlink(missing_ok=True)
 
 
 def show_upload_report(report, threshold):

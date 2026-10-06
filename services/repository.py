@@ -230,12 +230,13 @@ def move_back(candidate_id, from_step, from_status, to_step, to_status, steps_to
     Puts the candidate back on an earlier step and empties the data of the steps that will be redone.
     Only works if the candidate is still where HR saw them (from_step / from_status). Returns True if it worked.
     """
-    columns_to_empty = {}
-    for step in steps_to_redo:
-        columns_to_empty.update(STEP_COLUMNS.get(step, {}))
+    # The extra SQL that empties the columns of the steps to redo,
     # e.g. ", m2_decision = NULL, m2_feedback_by = NULL, m2_comments = NULL"
     # (the column names and values come only from STEP_COLUMNS above, never from what a user typed)
-    empty_columns_sql = "".join(f", {column} = {value}" for column, value in columns_to_empty.items())
+    empty_columns_sql = ""
+    for step in steps_to_redo:
+        for column, value in STEP_COLUMNS.get(step, {}).items():
+            empty_columns_sql += f", {column} = {value}"
     row = execute(
         f"""UPDATE candidates SET current_step = %s, status = %s, updated_at = NOW(){empty_columns_sql}
             WHERE id = %s AND current_step IS NOT DISTINCT FROM %s AND status = %s RETURNING id""",

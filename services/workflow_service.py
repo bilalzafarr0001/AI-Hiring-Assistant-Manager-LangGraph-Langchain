@@ -92,27 +92,41 @@ def shortlist_anyway(user, candidate_id):
 
 # ---------------------------------------------------------------- the steps of one candidate
 
+def steps_of_stage(stage):
+    """The steps of one stage, in order. 'M1 round' -> ['contact_hod', 'contact_interviewers', ..., 'record_m1']"""
+    steps = []
+    for step in STEP_ORDER:
+        if STEPS[step]["stage"] == stage:
+            steps.append(step)
+    return steps
+
+
 def process_path(candidate):
     """
     The steps this candidate's process goes through, following the decisions made so far:
     Screening -> (if shortlisted) M1 round -> (if M1 = Selected) M2 round.
     """
-    path = ["approve_shortlist"]
+    path = steps_of_stage("Screening")
     if candidate["shortlist_decision"] != "Shortlisted":
         return path
-    path += STEP_ORDER[STEP_ORDER.index("contact_hod"):STEP_ORDER.index("record_m1") + 1]
+    path = path + steps_of_stage("M1 round")
     if candidate["m1_decision"] != "Selected":
         return path
-    return path + STEP_ORDER[STEP_ORDER.index("hod_slots"):]
+    return path + steps_of_stage("M2 round")
 
 
 def completed_steps(candidate):
     """The steps already recorded for this candidate (the ones HR can go back to)."""
     path = process_path(candidate)
-    step = candidate["current_step"]
-    if step is None:  # process closed: every step on its path was recorded
+    current = candidate["current_step"]
+    if current is None:  # process closed: every step on its path was recorded
         return path
-    return [s for s in path if STEP_ORDER.index(s) < STEP_ORDER.index(step)]
+    # Keep only the steps that come before the current step.
+    done = []
+    for step in path:
+        if STEP_ORDER.index(step) < STEP_ORDER.index(current):
+            done.append(step)
+    return done
 
 
 def go_back(user, candidate_id, to_step, reason):
@@ -132,7 +146,9 @@ def go_back(user, candidate_id, to_step, reason):
     if to_step not in completed_steps(candidate):
         raise ValueError("You can only go back to a step that was already recorded.")
 
-    steps_to_redo = STEP_ORDER[STEP_ORDER.index(to_step):]
+    # This step and every step after it will be recorded again ("schedule_m1" -> schedule_m1, m1_interview, ...).
+    position = STEP_ORDER.index(to_step)
+    steps_to_redo = STEP_ORDER[position:]
     moved = repo.move_back(candidate_id, candidate["current_step"], candidate["status"],
                            to_step, STEPS[to_step]["stage"], steps_to_redo)
     if not moved:
