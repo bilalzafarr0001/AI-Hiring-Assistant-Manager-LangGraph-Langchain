@@ -69,8 +69,9 @@ def read_token(token, token_type):
     if not token:
         return None
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
-    except jwt.InvalidTokenError:        # wrong signature, expired, damaged...
+        # "require": a token without an expiry time (or without a user) is never accepted
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM], options={"require": ["exp", "iat", "sub"]})
+    except jwt.InvalidTokenError:        # wrong signature, expired, damaged, missing exp...
         return None
     if payload.get("type") != token_type:
         return None
