@@ -26,8 +26,9 @@ SKILL_ALIASES = {
     "typescript": ["ts"],
     "git": ["github", "gitlab", "bitbucket"],
     "github": ["git"],
-    "restapi": ["rest api", "rest apis", "restful", "restful api", "restful apis", "rest-api", "rest services"],
-    "restapis": ["rest api", "restful", "restful api", "restful apis"],
+    "restapi": ["rest api", "rest apis", "restful", "restful api", "restful apis", "rest-api", "rest services",
+                "django rest framework", "drf"],
+    "restapis": ["rest api", "restful", "restful api", "restful apis", "django rest framework", "drf"],
     "jwt": ["json web token", "json web tokens"],
     "rbac": ["role based access", "role-based access", "role based access control", "roles and permissions"],
     "authentication": ["auth", "jwt", "oauth", "login"],
@@ -48,6 +49,19 @@ SKILL_ALIASES = {
     "docker": ["docker compose", "dockerfile", "containers"],
     "microservices": ["micro services", "micro-services"],
     "websockets": ["websocket", "socket.io", "socketio"],
+}
+
+# Skills that a framework PROVES: whoever builds with NestJS works with Node.js, whoever builds with Django writes Python.
+# Used only for CVs (a CV that says "NestJS" has Node.js), never to read the job title.
+SHOWN_BY = {
+    "nodejs": ["nestjs", "nest.js", "express.js", "expressjs", "node/express"],
+    "node": ["nestjs", "nest.js", "express.js", "expressjs", "node/express"],
+    "python": ["django", "flask", "fastapi"],
+    "java": ["spring boot", "springboot"],
+    "php": ["laravel", "symfony", "codeigniter"],
+    "javascript": ["typescript", "node.js", "nodejs", "react", "reactjs", "angular", "vue", "vue.js", "jquery"],
+    "csharp": ["asp.net", ".net core", "dotnet"],
+    "c#": ["asp.net", ".net core", "dotnet"],
 }
 
 # Skill names that are also normal English words ("rest", "next", "go"...).
@@ -76,7 +90,8 @@ FILLER_WORDS = {"design", "development", "experience", "knowledge", "workflow", 
 
 # Short forms of degree fields written on CVs ("BSCS" = a bachelor's in computer science).
 DEGREE_FIELD_ALIASES = {
-    "computer science": ["bs cs", "bscs", "bs(cs)", "bs-cs", "ms cs", "mscs", "bcs", "mcs", "b.sc computer science"],
+    "computer science": ["bs cs", "bscs", "bs(cs)", "bs-cs", "ms cs", "mscs", "bcs", "mcs", "b.sc computer science",
+                         "master of computer science", "bachelor of computer science"],
     "software engineering": ["bs se", "bsse", "bs(se)", "bs-se", "ms se", "msse"],
     "information technology": ["bs it", "bsit", "bs(it)", "bs-it", "ms it", "msit"],
     "computer engineering": ["bs ce", "bsce", "computer systems engineering"],

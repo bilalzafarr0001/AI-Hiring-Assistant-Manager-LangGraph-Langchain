@@ -67,23 +67,26 @@ def complete_step(user, candidate_id, data, expected_step=None):
         raise
 
 
-def auto_shortlist(user, candidate_id, score, threshold, main_skills_missing):
+def auto_shortlist(user, candidate_id, score, threshold, main_skills_missing, too_few_years=""):
     """
-    Applies the job's shortlist rule to a new candidate. Shortlisted only when BOTH are true:
-    - the AI score >= the job's threshold, and
-    - no main skill is missing (a "Python Developer" CV without Python is never shortlisted automatically).
+    Applies the job's shortlist rule to a new candidate. Shortlisted only when ALL are true:
+    - the AI score >= the job's threshold,
+    - no main skill is missing (a "Python Developer" CV without Python is never shortlisted automatically), and
+    - enough experience (too_few_years is "" - e.g. "0.7 of 3+ years" when the candidate has far too few).
     Returns the decision, or None if there is no AI score (HR then decides in My Tasks).
     HR can still use "Shortlist anyway".
     """
     if score is None:
         return None
-    if score >= threshold and not main_skills_missing:
+    if score >= threshold and not main_skills_missing and not too_few_years:
         decision = "Shortlisted"
     else:
         decision = "Not shortlisted"
     details = {"decision": decision, "automatic": True, "ai_score": score, "threshold": threshold}
     if main_skills_missing:
         details["main_skills_missing"] = main_skills_missing    # shown in the history (Dashboard, Home)
+    if too_few_years:
+        details["too_few_years"] = too_few_years
     complete_step(user, candidate_id, details, expected_step="approve_shortlist")
     return decision
 

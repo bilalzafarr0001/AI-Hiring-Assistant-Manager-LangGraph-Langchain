@@ -39,6 +39,8 @@ def describe_activity(a):
         how = f": {details['decision']} automatically (AI score {details['ai_score']}, threshold {details['threshold']})"
         if details.get("main_skills_missing"):
             how += f", main skill missing: {', '.join(details['main_skills_missing'])}"
+        if details.get("too_few_years"):
+            how += f", too little experience: {details['too_few_years']}"
     elif details.get("override"):
         how = ": Shortlisted manually by HR (overrode the AI result)"
     channel = f" via {details['channel']}" if details.get("channel") else ""

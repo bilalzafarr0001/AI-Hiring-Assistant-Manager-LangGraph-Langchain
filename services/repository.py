@@ -41,7 +41,14 @@ def get_login_user(email):
 
 
 def create_department(name):
-    execute("INSERT INTO departments (name) VALUES (%s) ON CONFLICT (name) DO NOTHING", (name.strip(),))
+    """Adds the department. Returns False if it already exists (in any case: "engineering" = "Engineering")."""
+    row = execute(
+        """INSERT INTO departments (name) SELECT %s
+           WHERE NOT EXISTS (SELECT 1 FROM departments WHERE LOWER(name) = LOWER(%s))
+           ON CONFLICT (name) DO NOTHING RETURNING id""",
+        (name.strip(), name.strip()),
+    )
+    return row is not None
 
 
 def create_user(full_name, email, role, department_id=None, password_hash=None):
@@ -68,7 +75,7 @@ def get_signed_in_user(user_id):
 
 def bump_token_version(user_id):
     """Log out: every token made before for this user (on every device) stops working."""
-    execute("UPDATE users SET token_version = token_version + 1 WHERE id = %s", (user_id,))
+    execute("UPDATE users SET token_version = token_version  + 1 WHERE id = %s", (user_id,))
 
 
 # ---------- Jobs ----------
@@ -330,6 +337,14 @@ def get_activity(candidate_id):
         """SELECT a.*, u.full_name AS done_by FROM activity_log a
            LEFT JOIN users u ON u.id = a.user_id WHERE a.candidate_id = %s ORDER BY a.created_at, a.id""",
         (candidate_id,),
+    )
+
+
+def activity_for_steps(steps):
+    """Every history row of these steps, oldest first (for the statistics on the home page)."""
+    return fetch_all(
+        "SELECT candidate_id, step, details, created_at FROM activity_log WHERE step = ANY(%s) ORDER BY created_at, id",
+        (list(steps),),
     )
 
 

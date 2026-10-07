@@ -22,6 +22,14 @@ CONTEXT_WINDOW = 8192
 # Some models (like qwen3) "think" before they answer: much slower, and not needed here. False turns it off.
 THINKING = False
 
+# How long Ollama keeps the model in memory after an answer. Ollama's default (5 minutes) means the next upload
+# often waits for the model to load again AND loses the part of the prompt it could reuse (see scoring_prompt()).
+KEEP_LOADED = "30m"
+
+# The longest JSON answer allowed (in tokens). A CV answer is about 150-400 tokens; this only stops an answer that
+# never ends (then the CV goes to HR review instead of blocking the upload for minutes).
+MAX_JSON_TOKENS = 1000
+
 
 def ask_llm(prompt, json_mode=False):
     """
@@ -31,10 +39,11 @@ def ask_llm(prompt, json_mode=False):
     try:
         if json_mode:
             llm = ChatOllama(model=LLM_MODEL, base_url=OLLAMA_BASE_URL, num_ctx=CONTEXT_WINDOW,
-                             temperature=0, seed=42, format="json", reasoning=THINKING)
+                             temperature=0, seed=42, format="json", reasoning=THINKING, keep_alive=KEEP_LOADED,
+                             num_predict=MAX_JSON_TOKENS)
         else:
             llm = ChatOllama(model=LLM_MODEL, base_url=OLLAMA_BASE_URL, num_ctx=CONTEXT_WINDOW, temperature=0.2,
-                             reasoning=THINKING)
+                             reasoning=THINKING, keep_alive=KEEP_LOADED)
         return llm.invoke(prompt).content
     except Exception as error:  # Ollama not running, model not pulled, etc.
         print(f"[LLM] Not available: {error}")

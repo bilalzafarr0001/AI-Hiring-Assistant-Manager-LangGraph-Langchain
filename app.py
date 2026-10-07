@@ -8,6 +8,7 @@ import json
 import urllib.request
 from datetime import datetime
 
+import pandas as pd
 import streamlit as st
 
 from config.settings import APP_NAME, LLM_MODEL, OLLAMA_BASE_URL
@@ -99,6 +100,8 @@ def action_text(row):
         text = f"{details.get('decision', 'decided')} automatically (AI score {details.get('ai_score')})"
         if details.get("main_skills_missing"):
             text += f", main skill missing: {', '.join(details['main_skills_missing'])}"
+        if details.get("too_few_years"):
+            text += f", too little experience: {details['too_few_years']}"
         return text
     if details.get("override"):
         return "shortlisted manually by HR"
@@ -113,13 +116,55 @@ def using_demo_password():
     return st.session_state[key]
 
 
-# ---------------------------------------------------------------- data (5 queries)
+# ---------------------------------------------------------------- statistics helpers
+
+def last_months(count):
+    """The last `count` months, oldest first: [(2026, 5), (2026, 6), ..., (2026, 10)]"""
+    year, month = datetime.now().year, datetime.now().month
+    months = []
+    for _ in range(count):
+        months.insert(0, (year, month))
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+    return months
+
+
+def per_month(dates, months):
+    """How many of these dates fall in each of the months: [0, 2, 5, 1, 3, 4]"""
+    counts = {month: 0 for month in months}
+    for date in dates:
+        if (date.year, date.month) in counts:
+            counts[(date.year, date.month)] += 1
+    return [counts[month] for month in months]
+
+
+def latest_per_candidate(rows):
+    """
+    The last history row of each candidate. A step recorded again after "Go back" (or an offer changed
+    into a rejection) then counts once, with its final answer.
+    """
+    latest = {}
+    for row in rows:                      # rows are oldest first, so the last one wins
+        latest[row["candidate_id"]] = row
+    return list(latest.values())
+
+
+def month_card(label, monthly_counts, icon, help_text):
+    """A bordered metric: this month's number, the change since last month, and a 6-month sparkline."""
+    this_month, last_month = monthly_counts[-1], monthly_counts[-2]
+    st.metric(label, this_month, delta=this_month - last_month, delta_description="vs last month",
+              chart_data=monthly_counts, chart_type="bar", border=True, icon=icon, help=help_text)
+
+
+# ---------------------------------------------------------------- data (6 queries)
 
 jobs = repo.list_jobs()
 candidates = repo.list_candidates()
 people = repo.list_users()
 departments = repo.list_departments()
 activity = repo.recent_activity(8)
+history = repo.activity_for_steps(["approve_shortlist", "m1_interview", "m2_interview", "close_process"])
 
 open_cases = [c for c in candidates if c["current_step"]]          # still in the process
 needs_review = [c for c in open_cases if c["current_step"] == "approve_shortlist"]
@@ -182,15 +227,67 @@ if not jobs:
         st.page_link("pages/1_Jobs.py", label="Open a job →")
     st.stop()
 
-# ---------------------------------------------------------------- today at a glance
+# ---------------------------------------------------------------- this month (with the change since last month)
 
-m1, m2, m3, m4, m5, m6 = st.columns(6)
-m1.metric("Open jobs", len(jobs))
-m2.metric("Candidates", len(candidates))
-m3.metric("Waiting for a step", len(open_cases), help="Candidates whose next step must be recorded in My Tasks")
-m4.metric("Needs HR review", len(needs_review), help="CVs the AI could not score, or sent back to the shortlist step")
-m5.metric("In interviews", len(in_m1) + len(in_m2), help=f"M1 round: {len(in_m1)} · M2 round: {len(in_m2)}")
-m6.metric("Offers made", len(offers))
+months = last_months(6)
+shortlist_rows = [r for r in latest_per_candidate([h for h in history if h["step"] == "approve_shortlist"])
+                  if (r["details"] or {}).get("decision") == "Shortlisted"]
+m1_rows = latest_per_candidate([h for h in history if h["step"] == "m1_interview"])
+m2_rows = latest_per_candidate([h for h in history if h["step"] == "m2_interview"])
+offer_rows = [r for r in latest_per_candidate([h for h in history if h["step"] == "close_process"])
+              if (r["details"] or {}).get("outcome") == "Offer"]
+
+st.subheader(f"This month · {datetime.now():%B %Y}", icon=":material/calendar_month:")
+with st.container(horizontal=True):
+    month_card("New job openings", per_month([j["created_at"] for j in jobs], months), ":material/work:",
+               "Jobs created this month. The small bars show the last 6 months.")
+    month_card("CVs received", per_month([c["created_at"] for c in candidates], months), ":material/description:",
+               "CVs uploaded this month, for all jobs.")
+    month_card("Shortlisted", per_month([r["created_at"] for r in shortlist_rows], months), ":material/how_to_reg:",
+               "Candidates shortlisted this month (by the AI score or by a recruiter).")
+    month_card("Interviews held", per_month([r["created_at"] for r in m1_rows + m2_rows], months), ":material/groups:",
+               "M1 and M2 interviews recorded as done this month.")
+    month_card("Hired (offers)", per_month([r["created_at"] for r in offer_rows], months), ":material/workspace_premium:",
+               "Processes closed with an offer this month.")
+
+# ---------------------------------------------------------------- right now
+
+created = {c["id"]: c["created_at"] for c in candidates}
+days_to_offer = [(r["created_at"] - created[r["candidate_id"]]).days for r in offer_rows if r["candidate_id"] in created]
+shortlisted_ever = sum(1 for c in candidates if c["shortlist_decision"] == "Shortlisted")
+
+st.subheader("Right now", icon=":material/monitoring:")
+with st.container(horizontal=True):
+    st.metric("Open jobs", len(jobs), border=True, icon=":material/work_outline:")
+    st.metric("Waiting for a step", len(open_cases), border=True, icon=":material/pending_actions:",
+              help="Candidates whose next step must be recorded in My Tasks")
+    st.metric("Needs HR review", len(needs_review), border=True, icon=":material/rate_review:",
+              help="CVs the AI could not score, or sent back to the shortlist step")
+    st.metric("In interviews", len(in_m1) + len(in_m2), border=True, icon=":material/forum:",
+              help=f"M1 round: {len(in_m1)} · M2 round: {len(in_m2)}")
+    st.metric("Shortlist rate", f"{shortlisted_ever / len(candidates):.0%}" if candidates else "–", border=True,
+              icon=":material/filter_alt:", help="Of all CVs received, how many were shortlisted")
+    st.metric("Avg. time to hire", f"{sum(days_to_offer) / len(days_to_offer):.0f} days" if days_to_offer else "–",
+              border=True, icon=":material/timer:", help="From CV upload to the offer, for every candidate who got an offer")
+
+# ---------------------------------------------------------------- charts: funnel + last 6 months
+
+funnel_col, trend_col = st.columns(2, gap="medium")
+with funnel_col.container(border=True):
+    st.markdown("**Hiring funnel** (all time)")
+    funnel = pd.DataFrame({
+        "Stage": ["1 CVs received", "2 Shortlisted", "3 M1 interview", "4 M2 interview", "5 Offers"],
+        "Candidates": [len(candidates), shortlisted_ever, len(m1_rows), len(m2_rows), len(offers)],
+    })
+    st.bar_chart(funnel, x="Stage", y="Candidates", horizontal=True, height=260)
+with trend_col.container(border=True):
+    st.markdown("**Last 6 months**")
+    trend = pd.DataFrame({
+        "Month": [datetime(year, month, 1) for year, month in months],
+        "CVs received": per_month([c["created_at"] for c in candidates], months),
+        "Offers": per_month([r["created_at"] for r in offer_rows], months),
+    })
+    st.bar_chart(trend, x="Month", y=["CVs received", "Offers"], stack=False, height=260)
 
 st.divider()
 left, right = st.columns([3, 2], gap="large")

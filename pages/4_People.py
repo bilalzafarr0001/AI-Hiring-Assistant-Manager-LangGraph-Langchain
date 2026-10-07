@@ -23,12 +23,13 @@ with departments_tab:
     with st.form("add-dept", clear_on_submit=True):
         name = st.text_input("New department name")
         if st.form_submit_button("Add department"):
-            if name.strip():
-                repo.create_department(name)
+            if not name.strip():
+                st.error("Please enter a name.")
+            elif repo.create_department(name):
                 st.success("Department added.")
                 st.rerun()
             else:
-                st.error("Please enter a name.")
+                st.error(f"The department '{name.strip()}' already exists.")
     st.dataframe([{"Department": d["name"]} for d in departments], hide_index=True, width="stretch")
 
 # ---------------------------------------------------------------- HODs and interviewers (records only, no login)

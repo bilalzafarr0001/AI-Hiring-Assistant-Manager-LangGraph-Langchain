@@ -97,9 +97,11 @@ def save_uploaded_cvs(job, files, user):
                 label = name
             if rank["score"] is not None and rank["main_missing"]:
                 label = f"{name} ({rank['score']}, main skill missing: {', '.join(rank['main_missing'])})"
+            elif rank["score"] is not None and rank["too_few_years"]:
+                label = f"{name} ({rank['score']}, too little experience: {rank['too_few_years']})"
             try:
                 decision = auto_shortlist(user, candidate_id, rank["score"], job["shortlist_threshold"],
-                                          rank["main_missing"])
+                                          rank["main_missing"], rank["too_few_years"])
             except Exception as error:
                 print(f"[Shortlist] Could not apply the rule to candidate {candidate_id}: {error}")
                 decision = None
@@ -138,7 +140,8 @@ def show_upload_report(report, threshold):
         st.success(f"**Shortlisted ({len(report['shortlisted'])})** with a score of {threshold}+: "
                    + ", ".join(report["shortlisted"]) + ". They moved to the M1 round.")
     if report["not_shortlisted"]:
-        st.info(f"**Not shortlisted ({len(report['not_shortlisted'])})**, score below {threshold} or a main skill missing: "
+        st.info(f"**Not shortlisted ({len(report['not_shortlisted'])})**, score below {threshold}, a main skill missing "
+                f"or too little experience: "
                 + ", ".join(report["not_shortlisted"]))
     if report["review"]:
         st.warning(f"**Needs HR review ({len(report['review'])})**: the AI could not score "
