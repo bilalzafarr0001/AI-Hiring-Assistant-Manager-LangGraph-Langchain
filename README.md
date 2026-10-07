@@ -242,7 +242,7 @@ HR can see and change the main skills on the job page (Edit), and can still use 
 | Table          | What it keeps                                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `departments`  | Company departments                                                                                                                                  |
-| `users`        | HR / Recruitment accounts (they sign in), and HODs and interviewers (records only). `token_version` goes up by 1 on every log out                    |
+| `users`        | Recruiter accounts (role `RECRUITER`: every sign up is a recruiter), and HODs and interviewers (records only). `token_version` +1 on every log out |
 | `jobs`         | Open positions: title, description, department, AI shortlist threshold                                                                               |
 | `candidates`   | One row per CV: AI score and reason, where the process is now, the shortlist decision, assigned interviewers, M1 / M2 schedule, and M1 / M2 feedback |
 | `activity_log` | The history: every step, when, which recruiter recorded it, and the details (channel, notes...)                                                      |

@@ -5,34 +5,36 @@ Every step has ONE owner role. Only that role can complete the step.
 The order here is the order of the process.
 """
 
-ROLE_HR = "HR"
+# Only recruiters (the hiring department) have accounts and sign in. Every new account is a RECRUITER.
+# HODs and interviewers are kept as records only (they never sign in): HR records what they decided.
+ROLE_RECRUITER = "RECRUITER"
 ROLE_HOD = "HOD"
 ROLE_INTERVIEWER = "INTERVIEWER"
 
 ROLE_LABELS = {
-    ROLE_HR: "HR / Recruitment",
+    ROLE_RECRUITER: "Recruiter",
     ROLE_HOD: "HOD",
     ROLE_INTERVIEWER: "Interviewer",
 }
 
 STEPS = {
     # Stage 1: Screening
-    "approve_shortlist":    {"label": "Approve shortlist",            "owner": ROLE_HR,          "stage": "Screening"},
+    "approve_shortlist":    {"label": "Approve shortlist",            "owner": ROLE_RECRUITER,   "stage": "Screening"},
     # Stage 2: M1 round
-    "contact_hod":          {"label": "Contact department HOD",       "owner": ROLE_HR,          "stage": "M1 round"},
+    "contact_hod":          {"label": "Contact department HOD",       "owner": ROLE_RECRUITER,   "stage": "M1 round"},
     "contact_interviewers": {"label": "Contact interviewers",         "owner": ROLE_HOD,         "stage": "M1 round"},
-    "interviewer_slots":    {"label": "Coordinate interviewer slots", "owner": ROLE_HR,          "stage": "M1 round"},
-    "contact_candidate":    {"label": "Coordinate with candidate",    "owner": ROLE_HR,          "stage": "M1 round"},
-    "schedule_m1":          {"label": "Schedule M1 interview",        "owner": ROLE_HR,          "stage": "M1 round"},
+    "interviewer_slots":    {"label": "Coordinate interviewer slots", "owner": ROLE_RECRUITER,   "stage": "M1 round"},
+    "contact_candidate":    {"label": "Coordinate with candidate",    "owner": ROLE_RECRUITER,   "stage": "M1 round"},
+    "schedule_m1":          {"label": "Schedule M1 interview",        "owner": ROLE_RECRUITER,   "stage": "M1 round"},
     "m1_interview":         {"label": "M1 interview execution",       "owner": ROLE_INTERVIEWER, "stage": "M1 round"},
     "m1_feedback":          {"label": "Send M1 feedback to HR",       "owner": ROLE_INTERVIEWER, "stage": "M1 round"},
-    "record_m1":            {"label": "Record M1 result",             "owner": ROLE_HR,          "stage": "M1 round"},
+    "record_m1":            {"label": "Record M1 result",             "owner": ROLE_RECRUITER,   "stage": "M1 round"},
     # Stage 3: M2 round (only if M1 = Selected)
-    "hod_slots":            {"label": "Coordinate HOD slots",         "owner": ROLE_HR,          "stage": "M2 round"},
-    "schedule_m2":          {"label": "Schedule M2 interview",        "owner": ROLE_HR,          "stage": "M2 round"},
+    "hod_slots":            {"label": "Coordinate HOD slots",         "owner": ROLE_RECRUITER,   "stage": "M2 round"},
+    "schedule_m2":          {"label": "Schedule M2 interview",        "owner": ROLE_RECRUITER,   "stage": "M2 round"},
     "m2_interview":         {"label": "M2 interview execution",       "owner": ROLE_HOD,         "stage": "M2 round"},
     "m2_feedback":          {"label": "Send final feedback to HR",    "owner": ROLE_HOD,         "stage": "M2 round"},
-    "close_process":        {"label": "Close the process",            "owner": ROLE_HR,          "stage": "M2 round"},
+    "close_process":        {"label": "Close the process",            "owner": ROLE_RECRUITER,   "stage": "M2 round"},
 }
 
 STEP_ORDER = list(STEPS.keys())

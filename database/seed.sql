@@ -7,7 +7,7 @@ INSERT INTO departments (name) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO users (full_name, email, role, department_id) VALUES
-    ('Ayesha Khan (HR)',          'hr@bilal.local',           'HR',          NULL),
+    ('Ayesha Khan (Recruiter)',   'hr@bilal.local',           'RECRUITER',   NULL),
     ('Usman Ali (HOD Frontend)',  'hod.frontend@bilal.local', 'HOD',         (SELECT id FROM departments WHERE name = 'Frontend Engineering')),
     ('Sara Ahmed (HOD Backend)',  'hod.backend@bilal.local',  'HOD',         (SELECT id FROM departments WHERE name = 'Backend Engineering')),
     ('Hamza Tariq (Frontend)',    'hamza@bilal.local',        'INTERVIEWER', (SELECT id FROM departments WHERE name = 'Frontend Engineering')),

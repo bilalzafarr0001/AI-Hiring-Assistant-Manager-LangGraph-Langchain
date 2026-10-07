@@ -33,9 +33,9 @@ def list_departments():
 
 
 def get_login_user(email):
-    """Only HR / Recruitment users with a password can log in."""
+    """Only recruiters (role RECRUITER) with a password can sign in."""
     return fetch_one(
-        "SELECT * FROM users WHERE LOWER(email) = LOWER(%s) AND role = 'HR' AND password_hash IS NOT NULL",
+        "SELECT * FROM users WHERE LOWER(email) = LOWER(%s) AND role = 'RECRUITER' AND password_hash IS NOT NULL",
         (email.strip(),),
     )
 
@@ -58,10 +58,10 @@ def set_password(user_id, password_hash):
 # ---------- Signed-in user (the tokens themselves are made in services/security.py) ----------
 
 def get_signed_in_user(user_id):
-    """The HR user a token belongs to, or None if that user cannot sign in (no longer HR, or no password)."""
+    """The recruiter a token belongs to, or None if that user cannot sign in (not a recruiter, or no password)."""
     return fetch_one(
         """SELECT u.*, d.name AS department FROM users u LEFT JOIN departments d ON d.id = u.department_id
-           WHERE u.id = %s AND u.role = 'HR' AND u.password_hash IS NOT NULL""",
+           WHERE u.id = %s AND u.role = 'RECRUITER' AND u.password_hash IS NOT NULL""",
         (user_id,),
     )
 

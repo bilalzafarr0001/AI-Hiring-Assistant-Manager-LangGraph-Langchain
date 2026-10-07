@@ -2,7 +2,8 @@
 The CV score (0-100). rank_cv() is the function the Jobs page calls for every uploaded CV.
 
     Skills      40   the app looks for each required skill of the job in the whole CV     (services/cv_checks.py)
-    Experience  30   30 x (candidate's relevant years / job's minimum years)              (years read by the AI)
+    Experience  30   30 x (candidate's relevant years / job's minimum years)              (years read by the AI, never
+                     more than the CV states, nor more than its job dates add up to)
     Role fit    15   the AI judges it, with fixed levels                                  (services/prompts.py)
     Education   15   the AI judges it; 15 when the CV has a degree in a field the job names
 
@@ -11,7 +12,7 @@ The AI only reads the CV and gives numbers. The app checks those numbers and add
 Main skills: the skills the job is really about (from the job title, e.g. Python for "Python Developer").
 They do not change the score, but a CV without them is never shortlisted automatically (see auto_shortlist()).
 """
-from services.cv_checks import check_skills, cv_stated_years, has_required_degree
+from services.cv_checks import check_skills, cv_stated_years, cv_work_years, has_required_degree
 from services.job_requirements import education_fields, main_skills_of
 from services.llm import AI_UNAVAILABLE, ask_llm, read_json, to_points, to_years
 from services.prompts import scoring_prompt
@@ -83,6 +84,11 @@ def rank_cv(job_title, job_description, cv_text, criteria=None):
     stated = cv_stated_years(cv_text)
     if stated is not None and years > stated:   # the AI may never claim more years than the CV itself states
         years = stated
+    worked = cv_work_years(cv_text)
+    years_note = ""
+    if worked is not None and years > worked:   # ... nor more than the job dates in the CV add up to
+        years = worked
+        years_note = " (counted from the job dates in the CV)"
     fields = education_fields(job_description)
     degree_found = bool(fields) and has_required_degree(cv_text, fields)
     if degree_found:                            # a degree in a field the job names: full education points
@@ -93,7 +99,7 @@ def rank_cv(job_title, job_description, cv_text, criteria=None):
                  "role_fit": role_fit, "education": education}
     score = sum(breakdown.values())
     reason = write_reason(data, breakdown, how, matched, not_found, years, required_years, degree_found, fields,
-                          main_found, main_missing)
+                          main_found, main_missing, years_note)
 
     result.update({
         "name": str(data.get("name", "")).strip(),
@@ -118,7 +124,7 @@ def names_from(value):
 
 
 def write_reason(data, breakdown, how, matched, not_found, years, required_years, degree_found, fields,
-                 main_found, main_missing):
+                 main_found, main_missing, years_note):
     """The text HR reads under the score: the AI's summary, then how each part was scored."""
     reason = str(data.get("summary", "")).strip() or "No summary given."
     if main_missing:
@@ -137,7 +143,7 @@ def write_reason(data, breakdown, how, matched, not_found, years, required_years
         asked = f"{required_years:g}+ required"
     else:
         asked = f"no minimum stated, {DEFAULT_REQUIRED_YEARS}+ assumed"
-    reason += f"\nExperience: {years:g} relevant year(s), {asked}."
+    reason += f"\nExperience: {years:g} relevant year(s){years_note}, {asked}."
     if degree_found:
         reason += f"\nEducation: degree in a required field found ({', '.join(fields)})."
     return reason

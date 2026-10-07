@@ -152,6 +152,10 @@ def threshold_editor(job):
 def criteria_editor(job):
     """Shows (and lets HR edit) exactly what every CV of this job is checked against."""
     criteria = job.get("screening_criteria")
+    # A mistake in the Edit box is shown here, above the section: the Edit pop-up closes when the page reloads.
+    error_key = f"criteria-error-{job['id']}"
+    if st.session_state.get(error_key):
+        st.error(st.session_state.pop(error_key), icon=":material/error:")
     with st.expander("What CVs are checked against (required skills)", expanded=not criteria,
                      icon=":material/checklist:"):
         if criteria:
@@ -201,9 +205,12 @@ def criteria_editor(job):
                     all_names = [name.lower() for group in new_criteria["required_skills"] for name in group]
                     unknown = [name for group in main_groups for name in group if name.lower() not in all_names]
                     if not new_criteria["required_skills"]:
-                        st.error("Please enter at least one required skill.")
+                        st.session_state[error_key] = "Not saved: please enter at least one required skill."
+                        st.rerun()
                     elif unknown:
-                        st.error(f"Main skills must be in the required skills list. Not in the list: {', '.join(unknown)}")
+                        st.session_state[error_key] = ("Not saved: main skills must be in the required skills list. "
+                                                       f"Not in the list: {', '.join(unknown)}")
+                        st.rerun()
                     else:
                         repo.set_screening_criteria(job["id"], new_criteria)
                         flash("Required skills saved.")

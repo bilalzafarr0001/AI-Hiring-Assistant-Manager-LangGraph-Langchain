@@ -2,7 +2,7 @@
 -- The whole database: 5 tables. Safe to run more than once.
 --
 --   departments   company departments
---   users         HR / Recruitment accounts (they sign in) + HODs and interviewers (records only, they do not sign in)
+--   users         recruiter accounts (role RECRUITER, they sign in) + HODs and interviewers (records only, no sign in)
 --   jobs          open positions, with the AI shortlist threshold and screening criteria
 --   candidates    one row per CV: AI score, where the process is now, and every decision of the process
 --   activity_log  history: every step, who recorded it, when, and the details (channel, notes...)
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     id             SERIAL PRIMARY KEY,
     full_name      VARCHAR(150) NOT NULL,
     email          VARCHAR(150) UNIQUE NOT NULL,
-    role           VARCHAR(20)  NOT NULL CHECK (role IN ('HR', 'HOD', 'INTERVIEWER')),
+    role           VARCHAR(20)  NOT NULL CHECK (role IN ('RECRUITER', 'HOD', 'INTERVIEWER')),   -- every account is a RECRUITER
     department_id  INT REFERENCES departments(id),
     password_hash  TEXT,                 -- only HR / Recruitment users have one (they are the only ones who sign in)
     token_version  INT NOT NULL DEFAULT 0,   -- +1 on every log out: all sign-in tokens made before stop working
@@ -88,6 +88,11 @@ CREATE TABLE IF NOT EXISTS activity_log (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0;
 DROP TABLE IF EXISTS login_tokens;   -- older versions saved logins here; now the tokens are signed JWTs
+
+-- Older versions called the accounts 'HR'. Every account is now a 'RECRUITER' (only the hiring department signs in).
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+UPDATE users SET role = 'RECRUITER' WHERE role = 'HR';
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('RECRUITER', 'HOD', 'INTERVIEWER'));
 ALTER TABLE jobs  ADD COLUMN IF NOT EXISTS shortlist_threshold INT NOT NULL DEFAULT 70
     CHECK (shortlist_threshold BETWEEN 0 AND 100);
 ALTER TABLE jobs  ADD COLUMN IF NOT EXISTS screening_criteria JSONB;

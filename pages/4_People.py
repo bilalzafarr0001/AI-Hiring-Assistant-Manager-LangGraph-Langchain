@@ -1,7 +1,7 @@
 """Departments, HODs, interviewers, recruitment accounts and password change."""
 import streamlit as st
 
-from config.steps import ROLE_HOD, ROLE_INTERVIEWER, ROLE_LABELS
+from config.steps import ROLE_HOD, ROLE_INTERVIEWER, ROLE_LABELS, ROLE_RECRUITER
 from services import repository as repo
 from services.security import hash_password, verify_password
 from ui.auth import require_login
@@ -10,7 +10,7 @@ st.set_page_config(page_title="People", page_icon=":material/group:", layout="wi
 user = require_login()
 st.title("People", icon=":material/group:")
 st.caption("HODs and interviewers are kept here as records only. They do not log in. "
-           "Only HR / Recruitment accounts can log in.")
+           "Only recruiter accounts (the hiring department) can log in.")
 
 departments = repo.list_departments()
 dept_names = {d["id"]: d["name"] for d in departments}
@@ -55,7 +55,7 @@ with people_tab:
     st.dataframe([{"Name": p["full_name"], "Email": p["email"], "Role": ROLE_LABELS[p["role"]],
                    "Department": p["department"]} for p in people], hide_index=True, width="stretch")
 
-# ---------------------------------------------------------------- HR / Recruitment accounts (they log in)
+# ---------------------------------------------------------------- recruiter accounts (they log in)
 with accounts_tab:
     with st.form("add-hr", clear_on_submit=True):
         full_name = st.text_input("Full name")
@@ -68,14 +68,14 @@ with accounts_tab:
                 st.error("Password must be at least 8 characters.")
             else:
                 try:
-                    repo.create_user(full_name, email, "HR", None, hash_password(password))
+                    repo.create_user(full_name, email, ROLE_RECRUITER, None, hash_password(password))
                     st.success("Account created. They can now log in.")
                     st.rerun()
                 except Exception:
                     st.error("This email already exists.")
-    hr_users = repo.list_users(role="HR")
+    recruiters = repo.list_users(role=ROLE_RECRUITER)
     st.dataframe([{"Name": u["full_name"], "Email": u["email"],
-                   "Can log in": "Yes" if u["password_hash"] else "No"} for u in hr_users],
+                   "Can log in": "Yes" if u["password_hash"] else "No"} for u in recruiters],
                  hide_index=True, width="stretch")
 
 # ---------------------------------------------------------------- change my own password

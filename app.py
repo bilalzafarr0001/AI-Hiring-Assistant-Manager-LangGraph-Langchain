@@ -131,7 +131,7 @@ offers = [c for c in closed if c["status"] == OFFER]
 # ---------------------------------------------------------------- header
 
 st.title(APP_NAME, icon=":material/person_search:")
-first_name = user["full_name"].split(" (")[0].split()[0]       # "Ayesha Khan (HR)" -> "Ayesha"
+first_name = user["full_name"].split(" (")[0].split()[0]       # "Ayesha Khan (Recruiter)" -> "Ayesha"
 st.markdown(f"#### {greeting()}, {first_name} 👋")
 st.caption(f"{datetime.now():%A, %d %B %Y}  ·  Signed in as {user['email']}")
 

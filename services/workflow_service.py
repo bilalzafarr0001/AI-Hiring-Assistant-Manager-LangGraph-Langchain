@@ -9,7 +9,7 @@ HR records what the HOD / interviewer decided, and the app saves WHO gave the de
 """
 from functools import lru_cache
 
-from config.steps import ROLE_HR, STEP_ORDER, STEPS
+from config.steps import ROLE_RECRUITER, STEP_ORDER, STEPS
 from graph.workflow import build_graph
 from services import repository as repo
 
@@ -22,7 +22,7 @@ def get_graph():
 
 def can_act(user, step):
     """True if this user may complete (or go back to) this step: any real step, and only HR."""
-    return bool(step) and step in STEPS and user["role"] == ROLE_HR
+    return bool(step) and step in STEPS and user["role"] == ROLE_RECRUITER
 
 
 def start_workflow(candidate_id):

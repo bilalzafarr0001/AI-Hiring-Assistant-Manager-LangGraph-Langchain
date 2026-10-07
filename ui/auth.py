@@ -19,7 +19,7 @@ import psycopg
 import streamlit as st
 
 from config.settings import APP_NAME, JWT_SECRET
-from config.steps import ROLE_HR
+from config.steps import ROLE_RECRUITER
 from services import repository as repo
 from services.security import (ACCESS_TOKEN_MINUTES, REFRESH_TOKEN_DAYS, create_token, hash_password, read_token,
                                verify_password)
@@ -137,7 +137,7 @@ def sign_up_form():
                 st.error("The passwords do not match.")
             else:
                 try:
-                    repo.create_user(full_name, email, ROLE_HR, None, hash_password(password))
+                    repo.create_user(full_name, email, ROLE_RECRUITER, None, hash_password(password))   # always a recruiter
                 except psycopg.errors.UniqueViolation:
                     st.error("An account with this email already exists. Please sign in instead.")
                     return
