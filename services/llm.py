@@ -19,6 +19,9 @@ AI_UNAVAILABLE = "AI is not available right now. Please check that Ollama is run
 # 8192 tokens fits the instructions + job description + a full CV.
 CONTEXT_WINDOW = 8192
 
+# Some models (like qwen3) "think" before they answer: much slower, and not needed here. False turns it off.
+THINKING = False
+
 
 def ask_llm(prompt, json_mode=False):
     """
@@ -28,9 +31,10 @@ def ask_llm(prompt, json_mode=False):
     try:
         if json_mode:
             llm = ChatOllama(model=LLM_MODEL, base_url=OLLAMA_BASE_URL, num_ctx=CONTEXT_WINDOW,
-                             temperature=0, seed=42, format="json")
+                             temperature=0, seed=42, format="json", reasoning=THINKING)
         else:
-            llm = ChatOllama(model=LLM_MODEL, base_url=OLLAMA_BASE_URL, num_ctx=CONTEXT_WINDOW, temperature=0.2)
+            llm = ChatOllama(model=LLM_MODEL, base_url=OLLAMA_BASE_URL, num_ctx=CONTEXT_WINDOW, temperature=0.2,
+                             reasoning=THINKING)
         return llm.invoke(prompt).content
     except Exception as error:  # Ollama not running, model not pulled, etc.
         print(f"[LLM] Not available: {error}")

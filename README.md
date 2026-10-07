@@ -69,10 +69,12 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 **Step 4: Download the open-source LLM**
 
 ```
-ollama pull llama3.1
+ollama pull qwen3:4b-instruct
 ```
 
-(You can use another model, such as `mistral` or `qwen2.5`. Just change `LLM_MODEL` in `.env`.)
+`qwen3:4b-instruct` is small and fast: about 15-50 seconds per CV on a normal computer (llama3.1 took about 2 minutes).
+Use the **-instruct** version: plain `qwen3:4b` always "thinks" before answering, which is much slower.
+You can use another model, such as `llama3.1` or `qwen2.5:7b`. Just change `LLM_MODEL` in `.env`.
 
 **Step 5: Set up the database**
 
@@ -208,6 +210,12 @@ hiring_ai_assistant/
 `rank_cv()` in `services/scoring.py`. It checks the skills in the CV (`services/cv_checks.py`), asks the AI
 once (`services/prompts.py` + `services/llm.py`), checks the AI's numbers and adds up the four parts.
 
+**Main skills (must have):** every job also has main skills: the skills the job is really about.
+They come from the job title ("Python Developer" -> Python). If the title names no skill ("Backend Developer"),
+the AI picks the 1 or 2 core skills from the required list once. A CV without the main skills is **never shortlisted
+automatically**, whatever its score (Git, Docker or REST APIs alone are not enough for a Python job).
+HR can see and change the main skills on the job page (Edit), and can still use "Shortlist anyway".
+
 ---
 
 ## 6. How it works (simple version)
@@ -219,7 +227,8 @@ once (`services/prompts.py` + `services/llm.py`), checks the AI's numbers and ad
   and continue later, even after a restart.
 - When HR completes a step, the workflow saves it, follows the arrows, and stops at the next step that needs HR.
 - When CVs are uploaded, the AI scores each one against the job. A score at or above the job's
-  **shortlist threshold** (70 by default) is shortlisted automatically; HR can still "Shortlist anyway".
+  **shortlist threshold** (70 by default) is shortlisted automatically, but only if the CV has the job's
+  **main skills**; HR can still "Shortlist anyway".
 - Only logged-in **HR / Recruitment** users can see the platform or complete steps.
 - For HOD and interviewer steps, HR records **who** gave the decision; the app also saves **which recruiter** entered it.
 - Every action is saved in the **activity log** (what happened, through which channel, when, and recorded by whom).
@@ -249,7 +258,7 @@ check them without a table. Running `python -m database.setup_db` removes the `l
 | -------------------------------- | ---------------------------------------------------------------------------------- |
 | `password authentication failed` | Check the password in `DATABASE_URL` in your `.env` file                           |
 | `connection refused` (port 5432) | PostgreSQL isn't running. Start the PostgreSQL service                             |
-| "AI is not available"            | Start Ollama and run `ollama pull llama3.1`                                        |
+| "AI is not available"            | Start Ollama and run `ollama pull qwen3:4b-instruct`                               |
 | `No module named ...`            | Activate the virtual environment, then run `pip install -r requirements.txt` again |
 | "Wrong email or password"        | Use `hr@bilal.local` / `ChangeMe@123` (or the password you changed it to)          |
 | Login page keeps appearing       | Run `python -m database.setup_db` again to create the demo login                   |

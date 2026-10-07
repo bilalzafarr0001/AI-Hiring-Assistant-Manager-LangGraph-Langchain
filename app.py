@@ -96,7 +96,10 @@ def action_text(row):
     if row["step"] == "closed":
         return f"closed: {details.get('status', '')}"
     if details.get("automatic"):
-        return f"{details.get('decision', 'decided')} automatically (AI score {details.get('ai_score')})"
+        text = f"{details.get('decision', 'decided')} automatically (AI score {details.get('ai_score')})"
+        if details.get("main_skills_missing"):
+            text += f", main skill missing: {', '.join(details['main_skills_missing'])}"
+        return text
     if details.get("override"):
         return "shortlisted manually by HR"
     return STEPS.get(row["step"], {}).get("label", row["step"])
@@ -277,7 +280,8 @@ with st.expander("How the hiring process works", icon=":material/help:"):
 
 1. **Screening:** create a job, open it and upload CVs. The app scores every CV out of 100
    (skills 40 · experience 30 · role fit 15 · education 15). A score at or above the job's threshold is shortlisted
-   automatically; you can always *Shortlist anyway*.
+   automatically, but only if the CV has the job's **main skills** (e.g. Python for a Python Developer);
+   you can always *Shortlist anyway*.
 2. **M1 round:** contact the HOD → record the interviewers → interviewer slots → candidate availability → schedule →
    interview done → interviewer feedback → M1 result.
 3. **M2 round** (only if M1 = Selected): HOD slots → schedule → HOD interview → final feedback → close with an offer or rejection.

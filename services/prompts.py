@@ -65,6 +65,23 @@ JOB TITLE: {job_title}
 """
 
 
+def main_skills_prompt(job_title, groups):
+    """Used only when the job title names none of the required skills. The AI answers with the skills' numbers."""
+    numbered = "\n".join(f"{number}. {' / '.join(group)}" for number, group in enumerate(groups, start=1))
+    return f"""The job title is "{job_title}". These are the job's required skills:
+{numbered}
+
+Which 1 or 2 of these are the MAIN skills: the core skills this job is about, without which a candidate
+cannot do this job at all? Think like an experienced technical recruiter reading the job title.
+- Tools that almost every developer uses (Git, REST APIs, Jira, Agile, unit testing...) are NOT main skills,
+  unless the job title is about them (for example Docker and Kubernetes for a DevOps job).
+- Pick 2 only if the job really needs both of them. If either one alone would be enough, pick only the main one.
+
+Reply ONLY with JSON with the numbers from the list, in exactly this format:
+{{"main_skills": [1]}}
+"""
+
+
 # ---------------------------------------------------------------- score one CV
 
 def scoring_prompt(job_title, job_description, cv_text, has_skill_list, found, missing, min_years):
@@ -135,12 +152,13 @@ CV:
 # ---------------------------------------------------------------- small helpers for HR (services/ai_helpers.py)
 
 def message_prompt(purpose, candidate_name, job_title, recipient):
-    return f"""Write a short, polite, professional message.
+    return f"""You work in the company's HR / Recruitment team. Write a short, polite, professional message
+FROM HR / Recruitment TO the recipient below. Do not write as the candidate.
 Purpose: {purpose}
 Recipient: {recipient}
 Candidate: {candidate_name}
 Position: {job_title}
-Keep it under 120 words. Do not invent dates or times."""
+Keep it under 120 words. Do not invent dates or times. Sign it "HR / Recruitment"."""
 
 
 def interview_questions_prompt(job_description, cv_text):

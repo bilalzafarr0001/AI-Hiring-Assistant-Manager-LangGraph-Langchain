@@ -7,9 +7,12 @@ The CV score (0-100). rank_cv() is the function the Jobs page calls for every up
     Education   15   the AI judges it; 15 when the CV has a degree in a field the job names
 
 The AI only reads the CV and gives numbers. The app checks those numbers and adds up the score.
+
+Main skills: the skills the job is really about (from the job title, e.g. Python for "Python Developer").
+They do not change the score, but a CV without them is never shortlisted automatically (see auto_shortlist()).
 """
 from services.cv_checks import check_skills, cv_stated_years, has_required_degree
-from services.job_requirements import education_fields
+from services.job_requirements import education_fields, main_skills_of
 from services.llm import AI_UNAVAILABLE, ask_llm, read_json, to_points, to_years
 from services.prompts import scoring_prompt
 
@@ -23,20 +26,25 @@ DEFAULT_REQUIRED_YEARS = 2   # used when the job does not say how many years it 
 def rank_cv(job_title, job_description, cv_text, criteria=None):
     """
     Scores one CV against one job.
-    criteria = the job's saved screening criteria ({"required_skills": [...], "min_years": n}), or None.
-    Returns {name, email, score (0-100, or None if the AI could not score), reason, breakdown, matched, missing}.
+    criteria = the job's saved screening criteria ({"required_skills": [...], "min_years": n, "main_skills": [...]}),
+    or None.
+    Returns {name, email, score (0-100, or None if the AI could not score), reason, breakdown, matched, missing,
+    main_missing (the main skills NOT in the CV: if any, the CV is not shortlisted automatically)}.
     """
     result = {"name": "", "email": "", "score": None, "reason": AI_UNAVAILABLE,
-              "breakdown": {}, "matched": [], "missing": []}
+              "breakdown": {}, "matched": [], "missing": [], "main_missing": []}
     criteria = criteria or {}
     skill_groups = criteria.get("required_skills") or []
     min_years = criteria.get("min_years")
 
-    # Step 1: the app checks which required skills the CV mentions.
+    # Step 1: the app checks which required skills, and which main skills, the CV mentions.
     if skill_groups:
         found, missing = check_skills(cv_text, skill_groups)
+        main_found, main_missing = check_skills(cv_text, main_skills_of(job_title, criteria))
     else:
         found, missing = [], []
+        main_found, main_missing = [], []
+    result["main_missing"] = main_missing
 
     # Step 2: the AI reads the CV once.
     prompt = scoring_prompt(job_title, job_description, cv_text, has_skill_list=bool(skill_groups),
@@ -84,7 +92,8 @@ def rank_cv(job_title, job_description, cv_text, criteria=None):
     breakdown = {"skills": skills, "experience": experience_points(years, required_years),
                  "role_fit": role_fit, "education": education}
     score = sum(breakdown.values())
-    reason = write_reason(data, breakdown, how, matched, not_found, years, required_years, degree_found, fields)
+    reason = write_reason(data, breakdown, how, matched, not_found, years, required_years, degree_found, fields,
+                          main_found, main_missing)
 
     result.update({
         "name": str(data.get("name", "")).strip(),
@@ -108,9 +117,15 @@ def names_from(value):
     return [str(name).strip() for name in value or [] if str(name).strip()]
 
 
-def write_reason(data, breakdown, how, matched, not_found, years, required_years, degree_found, fields):
+def write_reason(data, breakdown, how, matched, not_found, years, required_years, degree_found, fields,
+                 main_found, main_missing):
     """The text HR reads under the score: the AI's summary, then how each part was scored."""
     reason = str(data.get("summary", "")).strip() or "No summary given."
+    if main_missing:
+        reason += (f"\nMAIN SKILL MISSING: {', '.join(main_missing)}. "
+                   f"Not shortlisted automatically, whatever the score.")
+    elif main_found:
+        reason += f"\nMain skills found: {', '.join(main_found)}."
     reason += (f"\nScore: Skills {breakdown['skills']}/{MAX_SKILLS}, Experience {breakdown['experience']}/{MAX_EXPERIENCE}, "
                f"Role Fit {breakdown['role_fit']}/{MAX_ROLE_FIT}, Education {breakdown['education']}/{MAX_EDUCATION}.")
     reason += f"\nSkills: {how}."

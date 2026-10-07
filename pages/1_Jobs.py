@@ -9,7 +9,7 @@ import streamlit as st
 
 from config.steps import STEPS
 from services import repository as repo
-from services.job_requirements import clean_criteria
+from services.job_requirements import clean_criteria, main_skills_of
 from services.workflow_service import shortlist_anyway
 from ui.auth import require_login
 from ui.cv_upload import ensure_screening_criteria, save_uploaded_cvs, show_upload_report
@@ -162,6 +162,12 @@ def criteria_editor(job):
                 st.caption(f"Minimum experience: {criteria['min_years']:g} years")
             else:
                 st.caption("Minimum experience: not stated (2 years assumed)")
+            main = main_skills_of(job["title"], criteria)
+            if main:
+                st.markdown(f"**Main skills (must have):** {', '.join(' / '.join(group) for group in main)}")
+                st.caption("A CV without the main skills is never shortlisted automatically, whatever its score.")
+            else:
+                st.caption("Main skills: none. Only the score decides.")
         else:
             st.info("Not read yet. It is read from the job description automatically before the first CV is scored, "
                     "or click 'Read from job description' now.")
@@ -175,6 +181,10 @@ def criteria_editor(job):
                                     height=220, placeholder="NestJS\nTypeScript\nPostgreSQL / MongoDB\nTypeORM / Prisma / Mongoose")
                 years = st.number_input("Minimum years of experience", 0.0, 30.0,
                                         float((criteria or {}).get("min_years") or 0), step=0.5)
+                current_main = main_skills_of(job["title"], criteria or {})
+                main_text = st.text_input("Main skills (must have), from the list above, separated by commas",
+                                          value=", ".join(" / ".join(group) for group in current_main),
+                                          placeholder="e.g. Python")
                 st.caption("Applies to CVs scored from now on. Earlier scores do not change.")
                 if st.form_submit_button("Save skills", type="primary"):
                     groups = []
@@ -182,9 +192,18 @@ def criteria_editor(job):
                         names = [name.strip() for name in line.split("/") if name.strip()]
                         if names:
                             groups.append(names)
-                    new_criteria = clean_criteria(groups, years)
+                    main_groups = []
+                    for piece in main_text.split(","):  # "Python, React / Vue" -> ["Python"], ["React", "Vue"]
+                        names = [name.strip() for name in piece.split("/") if name.strip()]
+                        if names:
+                            main_groups.append(names)
+                    new_criteria = clean_criteria(groups, years, main_groups)
+                    all_names = [name.lower() for group in new_criteria["required_skills"] for name in group]
+                    unknown = [name for group in main_groups for name in group if name.lower() not in all_names]
                     if not new_criteria["required_skills"]:
                         st.error("Please enter at least one required skill.")
+                    elif unknown:
+                        st.error(f"Main skills must be in the required skills list. Not in the list: {', '.join(unknown)}")
                     else:
                         repo.set_screening_criteria(job["id"], new_criteria)
                         flash("Required skills saved.")
@@ -202,7 +221,8 @@ def start_upload():
 def upload_section(job):
     st.subheader("Upload CVs", icon=":material/upload_file:")
     st.caption(f"The AI scores each CV against this job (0-100). "
-               f"A score of **{job['shortlist_threshold']} or more** is shortlisted automatically.")
+               f"A score of **{job['shortlist_threshold']} or more** is shortlisted automatically, "
+               f"if the CV also has the job's main skills.")
     report = st.session_state.pop("upload_report", None)
     if report:
         show_upload_report(report, job["shortlist_threshold"])

@@ -90,13 +90,16 @@ def save_uploaded_cvs(job, files, user):
                 undo_cv(candidate_id, path)
                 raise
 
-            # 5. Apply the job's rule: AI score >= threshold -> Shortlisted.
+            # 5. Apply the job's rule: AI score >= threshold AND no main skill missing -> Shortlisted.
             if rank["score"] is not None:
                 label = f"{name} ({rank['score']})"
             else:
                 label = name
+            if rank["score"] is not None and rank["main_missing"]:
+                label = f"{name} ({rank['score']}, main skill missing: {', '.join(rank['main_missing'])})"
             try:
-                decision = auto_shortlist(user, candidate_id, rank["score"], job["shortlist_threshold"])
+                decision = auto_shortlist(user, candidate_id, rank["score"], job["shortlist_threshold"],
+                                          rank["main_missing"])
             except Exception as error:
                 print(f"[Shortlist] Could not apply the rule to candidate {candidate_id}: {error}")
                 decision = None
@@ -135,7 +138,7 @@ def show_upload_report(report, threshold):
         st.success(f"**Shortlisted ({len(report['shortlisted'])})** with a score of {threshold}+: "
                    + ", ".join(report["shortlisted"]) + ". They moved to the M1 round.")
     if report["not_shortlisted"]:
-        st.info(f"**Not shortlisted ({len(report['not_shortlisted'])})**, score below {threshold}: "
+        st.info(f"**Not shortlisted ({len(report['not_shortlisted'])})**, score below {threshold} or a main skill missing: "
                 + ", ".join(report["not_shortlisted"]))
     if report["review"]:
         st.warning(f"**Needs HR review ({len(report['review'])})**: the AI could not score "
@@ -211,9 +214,15 @@ def ensure_screening_criteria(job, line):
 
 
 def criteria_text(criteria):
-    """{"required_skills": [["NestJS"], ["SQL", "NoSQL"]], "min_years": 3} -> 'NestJS · SQL / NoSQL · minimum 3 years'"""
-    skills = " · ".join(" / ".join(group) for group in criteria.get("required_skills", []))
+    """
+    {"required_skills": [["NestJS"], ["SQL", "NoSQL"]], "min_years": 3, "main_skills": [["NestJS"]]}
+    -> 'NestJS · SQL / NoSQL · minimum 3 years · main skills: NestJS'
+    """
+    text = " · ".join(" / ".join(group) for group in criteria.get("required_skills", []))
     years = criteria.get("min_years")
     if years:
-        return skills + f" · minimum {years:g} years"
-    return skills
+        text += f" · minimum {years:g} years"
+    main = criteria.get("main_skills")
+    if main:
+        text += " · main skills: " + ", ".join(" / ".join(group) for group in main)
+    return text

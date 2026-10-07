@@ -8,13 +8,17 @@ The app reads a simple "Required skills" list itself. Only when the list is writ
 (or there is no such list) does it ask the AI.
 
 Saved criteria look like this (a group with 2+ names means "any one of these is enough"):
-    {"required_skills": [["NestJS"], ["TypeScript"], ["PostgreSQL", "MongoDB"]], "min_years": 3}
+    {"required_skills": [["NestJS"], ["TypeScript"], ["PostgreSQL", "MongoDB"]], "min_years": 3,
+     "main_skills": [["NestJS"]]}
+"main_skills" are the skills the job is really about (from the job title). A CV without them is never shortlisted
+automatically, whatever its score.
 """
 import re
 
 from config.word_lists import NUMBER_WORDS
+from services.cv_checks import group_is_mentioned
 from services.llm import ask_llm, read_json, to_years
-from services.prompts import required_skills_prompt
+from services.prompts import main_skills_prompt, required_skills_prompt
 
 MAX_SKILL_GROUPS = 30
 
@@ -42,12 +46,21 @@ NOT_A_FIELD = re.compile(r"related|equivalent|similar|relevant|field|discipline|
 
 def extract_screening_criteria(job_title, job_description):
     """
-    Reads the job description ONCE and lists the required skills and the minimum years of experience.
-    Returns {"required_skills": [[...], ...], "min_years": n}, or None if they could not be read.
+    Reads the job description ONCE and lists the required skills, the minimum years of experience and the main skills.
+    Returns {"required_skills": [[...], ...], "min_years": n, "main_skills": [[...], ...]}, or None if they could not be read.
 
     1. The app finds the 'Required skills' section. If its lines are simple skill names, the app reads them itself.
     2. Otherwise the AI reads ONLY that section (or the whole description if there is no such section).
+    3. Then the main skills are chosen from the required skills (see choose_main_skills()).
     """
+    criteria = read_skills_and_years(job_title, job_description)
+    if criteria:
+        criteria["main_skills"] = choose_main_skills(job_title, criteria["required_skills"])
+    return criteria
+
+
+def read_skills_and_years(job_title, job_description):
+    """Steps 1 and 2 of extract_screening_criteria(): the required skills and the minimum years, or None."""
     # 1. The app reads a simple list itself.
     section = required_section(job_description)
     years = min_years_from(section or job_description.splitlines())
@@ -159,11 +172,30 @@ def simple_skill_groups(lines):
     return groups or None
 
 
-def clean_criteria(skills, min_years):
+def clean_criteria(skills, min_years, main_skills=None):
     """
     Tidies a criteria list (from the app, the AI, or HR's edit box):
     removes empty names and repeated groups, keeps at most 30 groups, and turns the years into a number.
+    Main skills are kept only if every name in them is one of the required skills (written as in that list).
     """
+    groups = clean_groups(skills)[:MAX_SKILL_GROUPS]
+
+    # Every required name in lower case -> as written in the list:  "python" -> "Python"
+    required_names = {}
+    for group in groups:
+        for name in group:
+            required_names[name.lower()] = name
+    main = []
+    for group in clean_groups(main_skills):
+        if all(name.lower() in required_names for name in group):
+            main.append([required_names[name.lower()] for name in group])
+
+    years = to_years(min_years)
+    return {"required_skills": groups, "min_years": years or 0, "main_skills": main}
+
+
+def clean_groups(skills):
+    """Removes empty names and repeated groups: [["A"], " B ", ["A"], [""]] -> [["A"], ["B"]]"""
     groups = []
     for group in skills or []:
         if isinstance(group, str):
@@ -177,8 +209,61 @@ def clean_criteria(skills, min_years):
                 names.append(name)
         if names and names not in groups:
             groups.append(names)
-    years = to_years(min_years)
-    return {"required_skills": groups[:MAX_SKILL_GROUPS], "min_years": years or 0}
+    return groups
+
+
+# ---------------------------------------------------------------- main skills (must have)
+
+def main_skills_from_title(job_title, groups):
+    """
+    The required skills named in the job title. Only the names that are in the title count:
+      "Python Developer"  with [["Python"], ["Django", "FastAPI", "Flask"]]  -> [["Python"]]
+      "Django Developer"  with [["Python"], ["Django", "FastAPI", "Flask"]]  -> [["Django"]]   (not FastAPI / Flask)
+      "Backend Developer" with the same list                                 -> []
+    The same matching as for CVs is used: "Java Developer" does not match "JavaScript".
+    """
+    title = " ".join((job_title or "").lower().split())
+    main = []
+    for group in groups:
+        names_in_title = []
+        for name in group:
+            if group_is_mentioned(title, [name]):
+                names_in_title.append(name)
+        if names_in_title:
+            main.append(names_in_title)
+    return main
+
+
+def choose_main_skills(job_title, groups):
+    """
+    The job's main skills: the required skills named in the job title.
+    If the title names none ("Backend Developer", "Software Engineer"), the AI picks the 1 or 2 skills the job is
+    really about, from the required list only. Returns [] if there are none: then only the score decides.
+    """
+    main = main_skills_from_title(job_title, groups)
+    if main or not groups:
+        return main
+
+    # The AI answers with the numbers of the skills in the list: {"main_skills": [1]}
+    data = read_json(ask_llm(main_skills_prompt(job_title, groups), json_mode=True))
+    if not data:
+        return []
+    main = []
+    for number in (data.get("main_skills") or [])[:2]:
+        try:
+            position = int(number)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= position <= len(groups) and groups[position - 1] not in main:
+            main.append(groups[position - 1])
+    return main
+
+
+def main_skills_of(job_title, criteria):
+    """The job's main skills. For a job saved before main skills existed, they are read from the title now (no AI)."""
+    if "main_skills" in criteria:
+        return criteria["main_skills"]
+    return main_skills_from_title(job_title, criteria.get("required_skills") or [])
 
 
 # ---------------------------------------------------------------- degree fields
@@ -196,6 +281,10 @@ def education_fields(job_description):
     for line in (job_description or "").splitlines():
         if EDUCATION_HEADING.match(line):
             inside = True
+            if ":" in line:                                  # "Education: Bachelor's degree in ..." on one line
+                after_colon = line.split(":", 1)[1].strip()
+                if after_colon:
+                    lines.append(after_colon)
             continue
         if inside and (OTHER_HEADING.match(line) or REQUIRED_HEADING.match(line)):
             break
