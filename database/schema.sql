@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     id             SERIAL PRIMARY KEY,
     full_name      VARCHAR(150) NOT NULL,
     email          VARCHAR(150) UNIQUE NOT NULL,
-    role           VARCHAR(20)  NOT NULL CHECK (role IN ('RECRUITER', 'HOD', 'INTERVIEWER')),   -- every account is a RECRUITER
+    role           VARCHAR(20)  NOT NULL DEFAULT 'RECRUITER' CHECK (role IN ('RECRUITER', 'HOD', 'INTERVIEWER')),   -- sign up = RECRUITER
     department_id  INT REFERENCES departments(id),
     password_hash  TEXT,                 -- only HR / Recruitment users have one (they are the only ones who sign in)
     token_version  INT NOT NULL DEFAULT 0,   -- +1 on every log out: all sign-in tokens made before stop working
@@ -93,6 +93,7 @@ DROP TABLE IF EXISTS login_tokens;   -- older versions saved logins here; now th
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 UPDATE users SET role = 'RECRUITER' WHERE role = 'HR';
 ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('RECRUITER', 'HOD', 'INTERVIEWER'));
+ALTER TABLE users ALTER COLUMN role SET DEFAULT 'RECRUITER';   -- a new user is a recruiter unless said otherwise
 ALTER TABLE jobs  ADD COLUMN IF NOT EXISTS shortlist_threshold INT NOT NULL DEFAULT 70
     CHECK (shortlist_threshold BETWEEN 0 AND 100);
 ALTER TABLE jobs  ADD COLUMN IF NOT EXISTS screening_criteria JSONB;
