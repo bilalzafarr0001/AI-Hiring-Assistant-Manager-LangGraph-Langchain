@@ -17,7 +17,8 @@ HR can still shortlist such a CV with "Shortlist anyway".
 import re
 from datetime import date
 
-from services.cv_checks import check_skills, cv_stated_years, cv_work_years, has_required_degree, month_number, years_of
+from services.cv_checks import (DATE_RANGE, check_skills, cv_stated_years, cv_work_years, has_required_degree,
+                                month_number, years_of)
 from services.job_requirements import education_fields, main_skills_of
 from services.llm import AI_UNAVAILABLE, ask_llm, read_json, to_points, to_years
 from services.prompts import scoring_prompt
@@ -29,6 +30,7 @@ MAX_EDUCATION = 15
 DEFAULT_REQUIRED_YEARS = 2   # used when the job does not say how many years it needs
 MIN_YEARS_SHARE = 0.75       # fewer relevant years than 3/4 of the job's minimum: not shortlisted automatically
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
 def rank_cv(job_title, job_description, cv_text, criteria=None):
@@ -69,7 +71,7 @@ def rank_cv(job_title, job_description, cv_text, criteria=None):
     # Step 3: the AI's numbers, kept inside their limits.
     role_fit = to_points(data.get("role_fit"), MAX_ROLE_FIT)
     education = to_points(data.get("education"), MAX_EDUCATION)
-    years, years_note = relevant_years(data, cv_text)
+    years, years_note, jobs_line = relevant_years(data, cv_text)
     required_years = min_years or to_years(data.get("required_experience_years"))
 
     # Step 4: the skills points.
@@ -101,7 +103,7 @@ def rank_cv(job_title, job_description, cv_text, criteria=None):
                  "role_fit": role_fit, "education": education}
     score = sum(breakdown.values())
     reason = write_reason(data, breakdown, how, matched, not_found, years, required_years, degree_found, fields,
-                          main_found, main_missing, years_note, result["too_few_years"])
+                          main_found, main_missing, years_note, jobs_line, result["too_few_years"])
 
     name = str(data.get("name", "")).strip()
     if name.isupper():                          # "HAMZA IQBAL" -> "Hamza Iqbal"
@@ -124,41 +126,59 @@ def email_in(cv_text):
 def relevant_years(data, cv_text):
     """
     The candidate's relevant years of experience, and a note for HR on how they were counted.
-    1. The AI copied every job with its dates and said if it was relevant. The app adds up the months of the
-       relevant jobs (jobs at the same time count once). A job whose years are not written in the CV is skipped,
-       so a date the AI invented never counts.
+    1. The AI copied every job with its dates and said if it was relevant. The app reads the dates and adds up the
+       months of the relevant jobs (jobs at the same time count once). A date whose year is not in the CV never
+       counts (the AI must not invent dates). If the AI garbled a job's dates, the app reads them from the line of
+       the CV where that job's title is.
     2. If the CV gives no job dates: the AI's total, but never more than the CV itself states ("4 years experience"),
        nor more than the dates in its Experience section add up to.
-    Returns (years, note), or (None, "") if the AI gave no number.
+    Returns (years, note, jobs_line), or (None, "", "") if the AI gave no number.
+    jobs_line tells HR which jobs were counted, e.g.
+      'counted: Python Developer (Mar 2022 – Present) · not counted (different work): Accountant (Jan 2018 – Dec 2022)'
     """
     today = date.today()
     this_month = today.year * 12 + today.month - 1
-    dated_jobs = 0
-    relevant = []
     jobs = data.get("jobs")
     if not isinstance(jobs, list):
         jobs = []
+
+    # 1. The dates of every job: as the AI copied them, or (if garbled) from the job's line in the CV.
+    dated = []          # [(job, first month, last month)]
+    garbled = []
     for job in jobs:
         if not isinstance(job, dict):
             continue
-        start = month_number(str(job.get("start") or ""), is_end=False, this_month=this_month)
-        end = month_number(str(job.get("end") or ""), is_end=True, this_month=this_month)
-        if start is None or end is None:
-            continue
-        end = min(end, this_month)
-        if start > end or not year_in_cv(start, cv_text):
-            continue
-        if end < this_month - 1 and not year_in_cv(end, cv_text):      # an end date that is not in the CV
-            continue
-        dated_jobs += 1
-        if str(job.get("relevant")).lower() == "true":
-            relevant.append([start, end])
-    if dated_jobs:
-        return years_of(relevant) or 0.0, " (added up from the job dates in the CV)"
+        start, end = job_months(job, cv_text, this_month)
+        if start is None:
+            garbled.append(job)
+        else:
+            dated.append((job, start, end))
+    for job in garbled:
+        taken = [[start, end] for _, start, end in dated]
+        start, end = dates_on_title_line(job.get("title"), cv_text, taken, this_month)
+        if start is not None:
+            dated.append((job, start, end))
+
+    # 2. Add up the relevant jobs.
+    if dated:
+        relevant = []
+        counted = []        # "Python Developer (Mar 2022 – Present)"
+        not_counted = []
+        for job, start, end in dated:
+            label = f"{str(job.get('title') or 'Job').strip()} ({month_text(start)} – {month_text(end, this_month)})"
+            if str(job.get("relevant")).lower() == "true":
+                relevant.append([start, end])
+                counted.append(label)
+            else:
+                not_counted.append(label)
+        jobs_line = "counted: " + ("; ".join(counted) or "none")
+        if not_counted:
+            jobs_line += " · not counted (different work): " + "; ".join(not_counted)
+        return years_of(relevant) or 0.0, " (added up from the job dates in the CV)", jobs_line
 
     years = to_years(data.get("relevant_experience_years"))
     if years is None:
-        return None, ""
+        return None, "", ""
     note = ""
     stated = cv_stated_years(cv_text)
     if stated is not None and years > stated:   # the AI may never claim more years than the CV itself states
@@ -167,7 +187,55 @@ def relevant_years(data, cv_text):
     if worked is not None and years > worked:   # ... nor more than the job dates in the CV add up to
         years = worked
         note = " (counted from the job dates in the CV)"
-    return years, note
+    return years, note, ""
+
+
+def job_months(job, cv_text, this_month):
+    """
+    A job's first and last month (month numbers) from the dates the AI copied, or (None, None) if they cannot be
+    read, are the wrong way round, or name a year that is not written in the CV.
+    """
+    start = month_number(str(job.get("start") or ""), is_end=False, this_month=this_month)
+    end = month_number(str(job.get("end") or ""), is_end=True, this_month=this_month)
+    if start is None or end is None:
+        return None, None
+    end = min(end, this_month)
+    if start > end or not year_in_cv(start, cv_text):
+        return None, None
+    if end < this_month - 1 and not year_in_cv(end, cv_text):      # an end date that is not in the CV
+        return None, None
+    return start, end
+
+
+def dates_on_title_line(title, cv_text, taken, this_month):
+    """
+    For a job whose dates the AI garbled: the date range on the CV line with the job's title (or one of the
+    2 lines after it). Ranges that already belong to another job are skipped. Returns (start, end) or (None, None).
+    """
+    title = " ".join(str(title or "").lower().split())
+    if len(title) < 3:
+        return None, None
+    lines = (cv_text or "").splitlines()
+    for number, line in enumerate(lines):
+        if title not in " ".join(line.lower().split()):
+            continue
+        for nearby in lines[number:number + 3]:
+            for match in DATE_RANGE.finditer(nearby):
+                start = month_number(match.group(1), is_end=False, this_month=this_month)
+                end = month_number(match.group(2), is_end=True, this_month=this_month)
+                if start is None or end is None:
+                    continue
+                end = min(end, this_month)
+                if start <= end and [start, end] not in taken:
+                    return start, end
+    return None, None
+
+
+def month_text(month, this_month=None):
+    """A month number as text for HR: 'Mar 2022', or 'Present' for this month (when it is the end of a job)."""
+    if month == this_month:
+        return "Present"
+    return f"{MONTH_NAMES[month % 12]} {month // 12}"
 
 
 def year_in_cv(month, cv_text):
@@ -191,7 +259,7 @@ def names_from(value):
 
 
 def write_reason(data, breakdown, how, matched, not_found, years, required_years, degree_found, fields,
-                 main_found, main_missing, years_note, too_few_years):
+                 main_found, main_missing, years_note, jobs_line, too_few_years):
     """The text HR reads under the score: the AI's summary, then how each part was scored."""
     reason = str(data.get("summary", "")).strip() or "No summary given."
     if main_missing:
@@ -214,6 +282,8 @@ def write_reason(data, breakdown, how, matched, not_found, years, required_years
     else:
         asked = f"no minimum stated, {DEFAULT_REQUIRED_YEARS}+ assumed"
     reason += f"\nExperience: {years:g} relevant year(s){years_note}, {asked}."
+    if jobs_line:
+        reason += f"\nJobs {jobs_line}."
     if degree_found:
         reason += f"\nEducation: degree in a required field found ({', '.join(fields)})."
     return reason
